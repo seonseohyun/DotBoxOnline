@@ -1,0 +1,6 @@
+@DotBox.Server_HostAddress = http://localhost:5217
+
+GET {{DotBox.Server_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

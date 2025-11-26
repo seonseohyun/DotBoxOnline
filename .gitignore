@@ -1,3 +1,78 @@
-.vs/
+
+############################################
+# .NET / C# (Server + GameCore + WinForms)
+############################################
+
+# Build outputs
 bin/
 obj/
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# ASP.NET & server stuff
+appsettings.Development.json
+appsettings.Local.json
+appsettings.*.json
+
+# Publish output
+publish/
+out/
+artifacts/
+
+# Logs
+*.log
+logs/
+log/
+*.nlog
+
+############################################
+# MacOS
+############################################
+.DS_Store
+
+############################################
+# Windows
+############################################
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+############################################
+# Node/Web (혹시 프런트 추가될 대비)
+############################################
+node_modules/
+dist/
+build/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+############################################
+# Python (혹시 AI/데이터쪽 붙을 대비)
+############################################
+__pycache__/
+*.pyc
+
+############################################
+# JetBrains Rider
+############################################
+.idea/
+*.iml
+
+############################################
+# Misc
+############################################
+*.bak
+*.tmp
+*.temp
+*.cache
+*.swp
