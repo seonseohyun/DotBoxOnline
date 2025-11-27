@@ -112,11 +112,7 @@ app.MapPost("/room/create", (CreateRoomRequest req) =>
 // 방 입장 (/room/join)
 app.MapPost("/room/join", (JoinRoomByCodeRequest req) =>
 {
-    // 1) playerId 존재여부 확인
-    if (!SessionStore.Players.ContainsKey(req.PlayerId))
-        return Results.BadRequest(new { error = "Invalid playerId" });
-
-    // 2)초대코드로 방 찾기 (대소문자 무시)
+    // 1) 초대코드로 방 찾기 (대소문자 무시)
     var room = RoomStore.Rooms.Values
         .FirstOrDefault(r =>
             string.Equals(r.InviteCode, req.InviteCode, StringComparison.OrdinalIgnoreCase));
@@ -124,12 +120,26 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req) =>
     if (room == null)
         return Results.NotFound(new { error = "Room not found" });
 
-    // 3) 방이 가득 찼는지 확인
+    // 2) playerId가 방에 존재하는지 확인
+    if (room.Players.Contains(req.PlayerId)) // 있으면 그냥 ok 반환
+    {
+        return Results.Ok(new
+        {
+            status = "ok",
+            room.RoomId,
+            room.InviteCode,
+        });
+    }     
+    // 여기까지 왔다는 건, 아직 방에 안 들어간 새 플레이어라는 뜻
+    // 3) 방이 가득 찼으면 결과 리턴
     if (room.IsFull)
         return Results.BadRequest(new { error = "Room is full" });
-    // 4) 플레이어를 방에 추가함
-    if (!room.Players.Contains(req.PlayerId))
-        room.Players.Add(req.PlayerId);
+
+    // 4) 아니면 플레이어를 방에 추가
+    room.Players.Add(req.PlayerId);
+
+    if (room.CurrentTurn == null && room.Players.Count > 0)
+        room.CurrentTurn = room.Players[0];
 
     return Results.Ok(new
     {
