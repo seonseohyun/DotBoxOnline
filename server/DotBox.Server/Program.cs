@@ -55,7 +55,6 @@ app.MapGet("/players", () =>
 
 //
 // 4) 방 (/room/join)
-// 방 생성: 방장(플레이어)이 방 하나 만들고 초대코드 받기
 app.MapPost("/room/create", (CreateRoomRequest req) =>
 {
     if (!SessionStore.Players.ContainsKey(req.PlayerId))
@@ -67,10 +66,11 @@ app.MapPost("/room/create", (CreateRoomRequest req) =>
         InviteCode = InviteCodeGenerator.Generate(6)
     };
 
-    // 방 만든 사람은 자동으로 입장 + 첫 턴
+    // 방 만든 사람은 자동으로 입장
     room.Players.Add(req.PlayerId);
-    room.CurrentTurn = req.PlayerId;
 
+    // 방 생성 시점에서는 턴을 정하지 않고 게임 시작시 결정하는 구조로 변경~
+    room.CurrentTurn = null;
     RoomStore.Rooms[room.RoomId] = room;
 
     return Results.Ok(new
@@ -80,11 +80,11 @@ app.MapPost("/room/create", (CreateRoomRequest req) =>
         players = room.Players,
         room.MaxPlayers,
         room.IsFull,
-        room.CurrentTurn
+        room.CurrentTurn //null 반환
     });
 });
 
-// 방 입장: 초대코드로 특정 방에 들어가기
+// 방 입장 (/room/join)
 app.MapPost("/room/join", (JoinRoomByCodeRequest req) =>
 {
     if (!SessionStore.Players.ContainsKey(req.PlayerId))
@@ -104,17 +104,11 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req) =>
     if (!room.Players.Contains(req.PlayerId))
         room.Players.Add(req.PlayerId);
 
-    if (room.CurrentTurn == null && room.Players.Count > 0)
-        room.CurrentTurn = room.Players[0];
-
     return Results.Ok(new
     {
+        status = "ok",
         room.RoomId,
-        room.InviteCode,
-        players = room.Players,
-        room.MaxPlayers,
-        room.IsFull,
-        room.CurrentTurn
+        room.InviteCode
     });
 });
 
@@ -132,7 +126,7 @@ app.MapGet("/room/state/{roomId}", (string roomId) =>
         room.InviteCode,
         players = room.Players,
         room.MaxPlayers,
-        room.CurrentTurn,
+        // room.CurrentTurn,
         room.CreatedAt,
         room.IsFull
     });
@@ -159,6 +153,7 @@ app.MapPost("/game/start", (GameStartRequest req) =>
         .ToList();
 
     room.TurnOrder = shuffled;
+    room.CurrentTurn = room.TurnOrder[0];    // 첫 번째 플레이어부터 시작    
     room.GameStarted = true;
 
     return Results.Ok(new
@@ -167,11 +162,11 @@ app.MapPost("/game/start", (GameStartRequest req) =>
         room.InviteCode,
         players = room.Players,
         turnOrder = room.TurnOrder,
-        firstPlayer = room.TurnOrder[0]
+        firstPlayer = room.TurnOrder[0],
+        CurrentTurn = room.CurrentTurn
     });
 });
 
-//
 // 6) 한 턴 진행 (/game/move)
 //    - 지금은 "턴만 바꾸는" 골격만 있음
 //      나중에 여기다가 Dot&Box 보드 로직 추가
@@ -181,13 +176,18 @@ app.MapPost("/game/move", (MoveRequest req) =>
     if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
         return Results.BadRequest(new { error = "Room not found" });
 
+    if (!room.GameStarted)
+        return Results.BadRequest(new { error = "Game not started" });
+    
+
     if (room.CurrentTurn != req.PlayerId)
         return Results.BadRequest(new { error = "Not your turn" });
 
-    // 턴 교대 (A ↔ B)
-    string nextTurn =
-        (room.PlayerA == req.PlayerId) ? room.PlayerB! : room.PlayerA!;
-
+    // TurnOrder에서 현재 플레이어의 다음 순서 찾기~
+    int currentIndex = room.TurnOrder.IndexOf(room.CurrentTurn);
+    // 다음 플레이어 인덱스 (마지막이면 처음으로 돌아감) -> 순환 구조로 턴 부여
+    int nextIndex = (currentIndex + 1) % room.TurnOrder.Count;
+    string nextTurn = room.TurnOrder[nextIndex];
     room.CurrentTurn = nextTurn;
 
     return Results.Ok(new
@@ -199,71 +199,71 @@ app.MapPost("/game/move", (MoveRequest req) =>
 });
 
 // 7) 게임 좌표 찍기 (/game/point)
-app.MapPost("/game/point", (GamePointRequest req) =>
-{
-    if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
-        return Results.BadRequest(new { error = "Room not found" });
+// app.MapPost("/game/point", (GamePointRequest req) =>
+// {
+//     if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
+//         return Results.BadRequest(new { error = "Room not found" });
 
-    if (!room.Players.Contains(req.PlayerId))
-        return Results.BadRequest(new { error = "Player not in room" });
+//     if (!room.Players.Contains(req.PlayerId))
+//         return Results.BadRequest(new { error = "Player not in room" });
 
-    if (!room.GameStarted)
-        return Results.BadRequest(new { error = "Game not started" });
+//     if (!room.GameStarted)
+//         return Results.BadRequest(new { error = "Game not started" });
 
-    var ev = new GamePointEvent
-    {
-        Seq = room.NextSeq++,
-        PlayerId = req.PlayerId,
-        X = req.X,
-        Y = req.Y,
-        CreatedAt = DateTime.UtcNow
-    };
+//     var ev = new GamePointEvent
+//     {
+//         Seq = room.NextSeq++,
+//         PlayerId = req.PlayerId,
+//         X = req.X,
+//         Y = req.Y,
+//         CreatedAt = DateTime.UtcNow
+//     };
 
-    room.Events.Add(ev);
+//     room.Events.Add(ev);
 
-    return Results.Ok(new
-    {
-        status = "ok",
-        roomId = room.RoomId,
-        point = new
-        {
-            ev.Seq,
-            ev.PlayerId,
-            ev.X,
-            ev.Y,
-            ev.CreatedAt
-        }
-    });
-});
+//     return Results.Ok(new
+//     {
+//         status = "ok",
+//         roomId = room.RoomId,
+//         point = new
+//         {
+//             ev.Seq,
+//             ev.PlayerId,
+//             ev.X,
+//             ev.Y,
+//             ev.CreatedAt
+//         }
+//     });
+// });
 
-// 8) 게임 좌표 이벤트 조회 (/game/points?roomId=...&afterSeq=...)
-app.MapGet("/game/points", (string roomId, long? afterSeq) =>
-{
-    if (!RoomStore.Rooms.TryGetValue(roomId, out var room))
-        return Results.BadRequest(new { error = "Room not found" });
+// // 8) 게임 좌표 이벤트 조회 (/game/points?roomId=...&afterSeq=...)
+// app.MapGet("/game/points", (string roomId, long? afterSeq) =>
+// {
+//     if (!RoomStore.Rooms.TryGetValue(roomId, out var room))
+//         return Results.BadRequest(new { error = "Room not found" });
 
-    long seq = afterSeq ?? 0;
+//     long seq = afterSeq ?? 0;
 
-    var events = room.Events
-        .Where(e => e.Seq > seq)
-        .OrderBy(e => e.Seq)
-        .Take(100) // 너무 많이 한 번에 안 보내려고 제한
-        .Select(e => new
-        {
-            e.Seq,
-            e.PlayerId,
-            e.X,
-            e.Y,
-            e.CreatedAt
-        })
-        .ToList();
+//     var events = room.Events
+//         .Where(e => e.Seq > seq)
+//         .OrderBy(e => e.Seq)
+//         .Take(100) // 너무 많이 한 번에 안 보내려고 제한
+//         .Select(e => new
+//         {
+//             e.Seq,
+//             e.PlayerId,
+//             e.X,
+//             e.Y,
+//             e.CreatedAt
+//         })
+//         .ToList();
 
-    return Results.Ok(new
-    {
-        roomId = room.RoomId,
-        events
-    });
-});
+//     return Results.Ok(new
+//     {
+//         roomId = room.RoomId,
+//         events
+//     });
+// });
 
 app.Run();
 
@@ -301,7 +301,7 @@ public class GameRoom
     public bool GameStarted { get; set; } = false;
 
     // 랜덤으로 섞인 턴 순서 (playerId 리스트)
-    public List<string> TurnOrder { get; set; } = new();
+    public List<string> TurnOrder { get; set; } = null!; //null or null!   ??뭔차이;;; 
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
@@ -311,6 +311,8 @@ public class GameRoom
     public long NextSeq { get; set; } = 1;  // 이벤트 시퀀스 번호
 
     public bool IsFull => Players.Count >= MaxPlayers;
+
+    public string? CurrentTurn { get; set;  } //현재 턴인 플레이어 ID (게임 시작 전에는 null)
 }
 
 public class GamePointEvent
