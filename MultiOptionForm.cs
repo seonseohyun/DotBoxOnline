@@ -21,18 +21,28 @@ namespace DotsAndBoxes
         private ComboBox cbBoardSize;
         private ComboBox cbPlayerCount;
         private TextBox txtRoomCode;
+        private Button btnBack;
 
         private void BuildUI()
         {
             this.Text = "Multiplay Options";
             this.Size = new System.Drawing.Size(500, 650);
 
+            // 뒤로가기 버튼
+            btnBack = new Button();
+            btnBack.Text = "◀ Back";            // 원하는 텍스트로 변경 가능
+            btnBack.Size = new Size(80, 30);
+            btnBack.Location = new Point(10, 10);  // 좌측 상단
+            btnBack.Click += BtnBack_Click;
+            this.Controls.Add(btnBack);
+            btnBack.BringToFront();
+
             // 제목
             Label lblTitle = new Label();
             lblTitle.Text = "Multiplayer Options";
+            lblTitle.AutoSize = true;
+            lblTitle.Location = new Point(100, 60);
             lblTitle.Font = new System.Drawing.Font("Arial", 20, System.Drawing.FontStyle.Bold);
-            lblTitle.Dock = DockStyle.Top;
-            lblTitle.Height = 80;
             lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
             this.Controls.Add(lblTitle);
 
@@ -73,7 +83,9 @@ namespace DotsAndBoxes
             btnCreateRoom.Font = new System.Drawing.Font("Arial", 14);
             btnCreateRoom.Size = new System.Drawing.Size(200, 50);
             btnCreateRoom.Location = new System.Drawing.Point(150, 290);
+            btnCreateRoom.Click += BtnCreateRoom_Click;
             this.Controls.Add(btnCreateRoom);
+
 
             // 초대코드 입력 및 방 참여 버튼 (Room code + Join button)
             txtRoomCode = new TextBox();
@@ -99,9 +111,9 @@ namespace DotsAndBoxes
                     txtRoomCode.ForeColor = System.Drawing.Color.Gray;
                 }
             };
-
             this.Controls.Add(txtRoomCode);
 
+            // 초대방 입장 버튼 (Join Room)
             Button btnJoinRoom = new Button();
             btnJoinRoom.Text = "Join Room";
             btnJoinRoom.Font = new System.Drawing.Font("Arial", 11);
@@ -110,5 +122,27 @@ namespace DotsAndBoxes
             this.Controls.Add(btnJoinRoom);
         }
 
+        // ====== 버튼 이벤트 함수 ======
+
+        // 방 만들기 클릭
+        private void BtnCreateRoom_Click(object sender, EventArgs e)
+        {
+            MainForm main = (MainForm)this.ParentForm;
+
+            // TODO: 서버에 방 생성 요청 → 초대코드 받아온 뒤 inviteCode에 넣기
+            string inviteCode = "ABCD-1234";
+
+            main.LoadChildForm(new MultiLobbyForm(inviteCode));
+        }
+
+        // 뒤로가기 클릭
+        private void BtnBack_Click(object sender, EventArgs e)
+        {
+            // ParentForm 은 항상 MainForm 이므로 캐스팅
+            MainForm main = (MainForm)this.ParentForm;
+
+            // 초기 화면으로 전환
+            main.LoadChildForm(new HomeForm());
+        }
     }
 }

@@ -12,57 +12,54 @@ namespace DotsAndBoxes
 {
     public partial class MainForm : Form
     {
+        private Panel mainPanel; // 화면 전환용 패널
+
         public MainForm()
         {
             InitializeComponent();
             BuildUI();
+            LoadChildForm(new HomeForm());      // 시작 화면 = HomeForm
         }
 
         private void BuildUI()
         {
             this.Text = "Dots and Boxes";
-            this.Size = new System.Drawing.Size(600, 800);
+            this.ClientSize = new Size(800, 600);
+            this.StartPosition = FormStartPosition.CenterScreen;
 
-            //제목
-            Label lblTitle = new Label();
-            lblTitle.Text = "DOTS & BOXES GAME !";
-            lblTitle.Dock = DockStyle.Top;
-            lblTitle.Height = 120;
-            lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            lblTitle.Font = new System.Drawing.Font("Arial", 28, System.Drawing.FontStyle.Bold);
-            this.Controls.Add(lblTitle);
-
-            // 컴퓨터와 게임하기 버튼 (Single Play)
-            Button btnSingle = new Button();
-            btnSingle.Text = "Single Play";
-            btnSingle.Font = new System.Drawing.Font("Arial", 16);
-            btnSingle.Size = new System.Drawing.Size(250, 60);
-            btnSingle.Location = new System.Drawing.Point(170, 300);
-
-            btnSingle.Click += new System.EventHandler(this.BtnSingle_Click);
-            this.Controls.Add(btnSingle);
-
-            // 다른사람과 게임하기 버튼 (Online Play)
-            Button btnOnline = new Button();
-            btnOnline.Text = "Multi Play";
-            btnOnline.Font = new System.Drawing.Font("Arial", 16);
-            btnOnline.Size = new System.Drawing.Size(250, 60);
-            btnOnline.Location = new System.Drawing.Point(170, 380);
-
-            btnOnline.Click += BtnOnline_Click;
-            this.Controls.Add(btnOnline);
+            // 화면 전환용 패널
+            mainPanel = new Panel();
+            mainPanel.Dock = DockStyle.Fill;     // MainForm 전체를 채우도록
+            mainPanel.BackColor = Color.White;   // 임시 배경색
+            this.Controls.Add(mainPanel);
         }
 
-        //클릭시 실행되는 이벤트함수들
+        // ====== 화면전환 하는 함수 (모든 폼 화면) ======
+        public void LoadChildForm(Form childForm)
+        {
+            // 기존 화면 제거
+            mainPanel.Controls.Clear();
+
+            // 새 화면 설정
+            childForm.TopLevel = false;     // 자식폼으로 사용
+            childForm.FormBorderStyle = FormBorderStyle.None;
+            childForm.Dock = DockStyle.Fill; // panel을 꽉 채움
+
+            // panel에 부착
+            mainPanel.Controls.Add(childForm);
+            childForm.Show(); // 화면 표시
+        }
+
+        // ====== 버튼 이벤트 함수 ======
         private void BtnSingle_Click(object sender, EventArgs e)
         {
-            SingleOptionsForm f = new SingleOptionsForm();
-            f.Show();
+            // SingleOptionForm을 panel에 로드
+            LoadChildForm(new SingleOptionForm());
         }
-        private void BtnOnline_Click(object sender, EventArgs e)
+        private void BtnMulti_Click(object sender, EventArgs e)
         {
-            MultiOptionForm f = new MultiOptionForm();
-            f.Show();
+            // MultiOptionForm을 panel에 로드
+            LoadChildForm(new MultiOptionForm());
         }
     }
 }

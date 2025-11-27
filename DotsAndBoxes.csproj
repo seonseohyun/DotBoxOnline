@@ -46,11 +46,35 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="GamePlayForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="GamePlayForm.Designer.cs">
+      <DependentUpon>GamePlayForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="GameResultForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="GameResultForm.Designer.cs">
+      <DependentUpon>GameResultForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="HomeForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="HomeForm.Designer.cs">
+      <DependentUpon>HomeForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="MainForm.Designer.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MultiLobbyForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MultiLobbyForm.Designer.cs">
+      <DependentUpon>MultiLobbyForm.cs</DependentUpon>
     </Compile>
     <Compile Include="MultiOptionForm.cs">
       <SubType>Form</SubType>
@@ -58,11 +82,11 @@
     <Compile Include="MultiOptionForm.Designer.cs">
       <DependentUpon>MultiOptionForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="SingleOptionsForm.cs">
+    <Compile Include="SingleOptionForm.cs">
       <SubType>Form</SubType>
     </Compile>
-    <Compile Include="SingleOptionsForm.Designer.cs">
-      <DependentUpon>SingleOptionsForm.cs</DependentUpon>
+    <Compile Include="SingleOptionForm.Designer.cs">
+      <DependentUpon>SingleOptionForm.cs</DependentUpon>
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
