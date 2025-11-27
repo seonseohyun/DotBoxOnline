@@ -1,6 +1,61 @@
-@DotBox.Server_HostAddress = http://localhost:5217
+### 1) 헬스 체크
+GET http://localhost:5217/health
 
-GET {{DotBox.Server_HostAddress}}/weatherforecast/
-Accept: application/json
 
-###
+### 2) 플레이어1 접속
+#P1: 6b73370a06264c6faf3fb926684e4d36
+POST http://localhost:5217/connect
+Content-Type: application/json
+
+{
+  "playerName": "seonseo"
+}
+
+### 3) 플레이어2 접속
+#P2: c494422077a343909ab4aca9ee317709
+POST http://localhost:5217/connect
+Content-Type: application/json
+
+{
+  "playerName": "pse"
+}
+
+### 4) 플레이어3 접속
+#P3: 1777a261358640f187711363c8cf8f91
+POST http://localhost:5217/connect
+Content-Type: application/json
+
+{
+  "playerName": "hhh"
+}
+
+### 5) 방 생성
+# Room ID: 871b044dc1014f48a98013da6272ef93
+# Invite Code: KN43XC
+
+POST http://localhost:5217/room/create
+Content-Type: application/json
+
+{
+  "playerId": "6b73370a06264c6faf3fb926684e4d36"
+}
+
+
+### 6) 방 입장 (플레이어2 초대코드로 입장)
+POST http://localhost:5217/room/join
+Content-Type: application/json
+
+{
+  "playerId": "c494422077a343909ab4aca9ee317709",
+  "inviteCode": "KN43XC"
+}
+    
+### 7) 방 입장 (플레이어3 초대코드로 입장)
+POST http://localhost:5217/room/join
+Content-Type: application/json
+
+{
+  "playerId": "1777a261358640f187711363c8cf8f91",
+  "inviteCode": "KN43XC"
+}
+
