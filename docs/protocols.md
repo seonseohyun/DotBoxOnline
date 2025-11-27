@@ -1,4 +1,4 @@
-## 🚀 DotBox 서버 프로토콜 명세서 (API Specification)
+## DotBox 서버 프로토콜 명세서 (API Specification)
 
 | 구분 | 내용 |
 | :--- | :--- |
@@ -33,20 +33,20 @@
 | **Path**   | `/health` |
 | **Request Body** | 없음 |
 
-#### 예시 요청
-##### 1) HTTP Raw 예시 
-```http
-GET /health HTTP/1.1
-Host: 43.201.40.98:8080
-Accept: */*
-```
+### Request:
+* HTTP Raw 예시 
+    ```http
+    GET /health HTTP/1.1
+    Host: 43.201.40.98:8080
+    Accept: */*
+    ```
 
-##### 2) curl 예시
-```
-curl http://43.201.40.98:8080/health
-```
+* curl 예시
+    ```
+    curl http://43.201.40.98:8080/health
+    ```
 
-#### Response:
+### Response:
 ```json
 { "status": "ok" }
 ```
@@ -61,3 +61,35 @@ curl http://43.201.40.98:8080/health
 | **Request Body** | JSON (아래 명세 참고)                |
 | **Response**     | Player 세션 정보(JSON)             |
 | **에러 코드**        | `400 Bad Request` (유효하지 않은 이름) |
+
+### Request Body:
+```json
+{
+  "playerName": "seonseo"
+}
+```
+| 필드명        | 타입     | 필수 | 설명                           |
+| ---------- | ------ | -- | ------------------------         |
+| playerName | string | O  | 플레이어 닉네임 (공백 또는 빈문자열 불가) |
+
+### Response:
+* 성공 (200 OK)
+    ```json
+    {
+      "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+      "playerName": "seonseo",
+      "connectedAt": "2025-11-27T01:23:45.678Z"
+    }
+    ```
+    | 필드명         | 타입     | 설명                        |
+    | ----------- | ------ | ------------------------- |
+    | playerId    | string | 서버에서 발급한 고유 GUID (문자열 형태) |
+    | playerName  | string | 요청 시 전달한 이름               |
+    | connectedAt | string | 접속 시간(UTC, ISO-8601)      |
+
+* 실패
+    
+    ```json
+    // playerName이 공백이거나 null, 빈 문자열인 경우
+    { "error": "playerName is required" }
+    ```
