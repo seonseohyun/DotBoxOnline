@@ -17,7 +17,8 @@ namespace DotsAndBoxes
         private Label lblPlayer2;
         private Label lblPlayer3;
         private Button btnStart;
-        private Button btnBack;
+        private Button btnExit;
+
 
         public MultiLobbyForm()
         {
@@ -25,7 +26,7 @@ namespace DotsAndBoxes
             BuildUI();
         }
 
-        // (선택) 방 생성 시 초대코드를 넘기고 싶을 때 쓰는 생성자
+        // 초대코드만 받는 생성자 
         public MultiLobbyForm(string inviteCode) : this()
         {
             txtInviteCode.Text = inviteCode;
@@ -36,15 +37,6 @@ namespace DotsAndBoxes
             this.Text = "Multi Lobby";
             this.BackColor = Color.White;
             this.Size = new Size(500, 600);
-
-            // 뒤로가기 버튼
-            btnBack = new Button();
-            btnBack.Text = "◀ Back";            // 원하는 텍스트로 변경 가능
-            btnBack.Size = new Size(80, 30);
-            btnBack.Location = new Point(10, 10);  // 좌측 상단
-            btnBack.Click += BtnBack_Click;
-            this.Controls.Add(btnBack);
-            btnBack.BringToFront();
 
             // ===== 제목 =====
             var lblTitle = new Label();
@@ -67,7 +59,7 @@ namespace DotsAndBoxes
             txtInviteCode.Width = 360;
             txtInviteCode.ReadOnly = true;             // 초대코드 표시 전용
             txtInviteCode.TextAlign = HorizontalAlignment.Center;
-            txtInviteCode.Text = "ABCD-1234";          // TODO: 실제 서버 코드로 교체
+            //txtInviteCode.Text = "ABCD-1234";          // TODO: 실제 서버 코드로 교체
             this.Controls.Add(txtInviteCode);
 
             // ===== 플레이어 슬롯 영역 =====
@@ -116,6 +108,15 @@ namespace DotsAndBoxes
             btnStart.Location = new Point(140, 420);
             btnStart.Click += BtnStart_Click;
             this.Controls.Add(btnStart);
+
+            // ===== Exit 버튼 =====
+            btnExit = new Button();
+            btnExit.Text = "나가기";
+            btnExit.Font = new Font("맑은 고딕", 12, FontStyle.Bold);
+            btnExit.Size = new Size(220, 50);
+            btnExit.Location = new Point(140, 500);    // Start 밑에 배치
+            btnExit.Click += BtnExit_Click;
+            this.Controls.Add(btnExit);
         }
 
         // TODO: 나중에 서버에서 유저 리스트를 받을 때 이 메서드를 이용해서 UI 업데이트
@@ -135,14 +136,14 @@ namespace DotsAndBoxes
             main.LoadChildForm(new GamePlayForm());
         }
 
-        // 뒤로가기 클릭
-        private void BtnBack_Click(object sender, EventArgs e)
+        // 나가기 클릭
+        private void BtnExit_Click(object sender, EventArgs e)
         {
-            // ParentForm 은 항상 MainForm 이므로 캐스팅
+            // TODO: 서버에 "로비 나가기" 요청 보내기 (HTTP)
+            // 예: POST /lobby/leave { userId, inviteCode }
             MainForm main = (MainForm)this.ParentForm;
-
-            // 초기 화면으로 전환
             main.LoadChildForm(new HomeForm());
         }
+
     }
 }

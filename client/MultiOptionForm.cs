@@ -93,7 +93,7 @@ namespace DotsAndBoxes
             txtRoomCode.ForeColor = System.Drawing.Color.Gray;
             txtRoomCode.Location = new System.Drawing.Point(60, 380);
             txtRoomCode.Width = 280;
-
+            
             // Placeholder 기능
             txtRoomCode.GotFocus += (s, e) =>
             {
@@ -119,20 +119,99 @@ namespace DotsAndBoxes
             btnJoinRoom.Font = new System.Drawing.Font("Arial", 11);
             btnJoinRoom.Size = new System.Drawing.Size(100, 28);
             btnJoinRoom.Location = new System.Drawing.Point(350, 378);
+            btnJoinRoom.Click += BtnJoinRoom_Click;
             this.Controls.Add(btnJoinRoom);
         }
 
         // ====== 버튼 이벤트 함수 ======
-
-        // 방 만들기 클릭
-        private void BtnCreateRoom_Click(object sender, EventArgs e)
+        
+        // 방 "만들기" 클릭
+        private async void BtnCreateRoom_Click(object sender, EventArgs e)
         {
-            MainForm main = (MainForm)this.ParentForm;
+            // HomeForm에서 /connect를 이미 호출했다는 가정.
+            // 혹시 몰라서 방어 코드도 추가.
+            if (string.IsNullOrEmpty(AppSession.PlayerId))
+            {
+                MessageBox.Show(
+                    "서버 연결 정보가 없습니다.\n처음 화면으로 돌아갑니다.",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
 
-            // TODO: 서버에 방 생성 요청 → 초대코드 받아온 뒤 inviteCode에 넣기
-            string inviteCode = "ABCD-1234";
+                MainForm m = (MainForm)this.ParentForm;
+                m.LoadChildForm(new HomeForm());
+                return;
+            }
 
-            main.LoadChildForm(new MultiLobbyForm(inviteCode));
+            try
+            {
+                var roomRes = await ServerApi.CreateRoomAsync(AppSession.PlayerId);
+
+                // 로비로 이동 (초대코드 전달)
+                MainForm main = (MainForm)this.ParentForm;
+                main.LoadChildForm(new MultiLobbyForm(roomRes.inviteCode));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    ex.Message,
+                    "방 생성 실패",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
+        }
+
+        // 방 "참가" 클릭
+        private async void BtnJoinRoom_Click(object sender, EventArgs e)
+        {
+            if (string.IsNullOrEmpty(AppSession.PlayerId))
+            {
+                MessageBox.Show(
+                    "서버 연결 정보가 없습니다.\n처음 화면으로 돌아갑니다.",
+                    "오류",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning
+                );
+
+                MainForm m = (MainForm)this.ParentForm;
+                m.LoadChildForm(new HomeForm());
+                return;
+            }
+
+            string code = txtRoomCode.Text.Trim();
+
+            // placeholder 상태 방지
+            if (string.IsNullOrWhiteSpace(code) ||
+                (txtRoomCode.ForeColor == System.Drawing.Color.Gray && code == "Enter Room Code"))
+            {
+                MessageBox.Show(
+                    "초대 코드를 입력해주세요.",
+                    "입력 필요",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information
+                );
+                return;
+            }
+
+            try
+            {
+                var joinRes = await ServerApi.JoinRoomAsync(AppSession.PlayerId, code);
+
+                // 성공 시 로비로 이동
+                MainForm main = (MainForm)this.ParentForm;
+                main.LoadChildForm(new MultiLobbyForm(joinRes.inviteCode));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    ex.Message,
+                    "방 참가 실패",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+            }
         }
 
         // 뒤로가기 클릭
