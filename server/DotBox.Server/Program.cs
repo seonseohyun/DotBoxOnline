@@ -8,10 +8,39 @@ var builder = WebApplication.CreateBuilder(args);  //서버 설정/환경구성
 var app = builder.Build();                         //서버 본체 생성
 
 // ====================================================================
+// 공통 요청/응답 로그 미들웨어
+// ====================================================================
+
+app.Use(async (context, next) =>
+{
+    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+    //[Debug] 요청 메서드/경로/쿼리 로그
+    logger.LogInformation("[REQ] {Method} {Path}{QueryString}",
+        context.Request.Method,
+        context.Request.Path,
+        context.Request.QueryString.HasValue ? context.Request.QueryString.Value : "");
+
+    await next();
+
+    //[Debug] 응답 상태 코드 로그
+    logger.LogInformation("[RES] {StatusCode} {Method} {Path}",
+        context.Response.StatusCode,
+        context.Request.Method,
+        context.Request.Path);
+});
+
+// ====================================================================
 // 1) 헬스 체크 (/health)
 // ====================================================================
 
-app.MapGet("/health", () => new { status = "ok" });
+app.MapGet("/health", (ILogger<Program> logger) =>
+{
+    //[Debug] 헬스체크 호출 로그
+    logger.LogInformation("[Health] /health called");
+
+    return Results.Ok(new { status = "ok" });
+});
 /*
 MapGet ("경로",핸들러함수) /health 경로로 Get 요청이 오면 핸들러함수를 실행
 () => 람다식(익명함수) 사용 ()는 빈 함수 리턴 객체가 자동으로 JSON 변환되어 응답됨
@@ -23,14 +52,21 @@ MapGet ("경로",핸들러함수) /health 경로로 Get 요청이 오면 핸들�
 //    - playerName을 받으면 playerId 만들어서 SessionStore에 저장
 // ====================================================================
 
-app.MapPost("/connect", (ConnectRequest req) =>
+app.MapPost("/connect", (ConnectRequest req, ILogger<Program> logger) =>
 {
     // ⚝Model Binding : 
     // 클라이언트의 JSON body의 "playerName" 필드를 ConnectRequest.PlayerName에 자동 매핑
 
+    //[Debug] 접속 요청 바디 로그
+    logger.LogInformation("[Connect] request playerName={PlayerName}", req.PlayerName);
+
     // playerName 유효성 검사
     if (string.IsNullOrWhiteSpace(req.PlayerName))
+    {
+        //[Debug] 잘못된 playerName 로그
+        logger.LogWarning("[Connect] invalid playerName (empty or whitespace)");
         return Results.BadRequest(new { error = "playerName is required" });
+    }
 
     // 고유한 플레이어 ID 생성
     /*
@@ -51,6 +87,10 @@ app.MapPost("/connect", (ConnectRequest req) =>
     //currentDictionary에 플레이어 세션 등록, 왜? -> 여러 스레드에서 동시에 접근할 수 있기 때문에
     SessionStore.Players[playerId] = session;
 
+    //[Debug] 생성된 세션 정보 로그
+    logger.LogInformation("[Connect] created session playerId={PlayerId}, playerName={PlayerName}, connectedAt={ConnectedAt}",
+        session.PlayerId, session.PlayerName, session.ConnectedAt);
+
     // 클라이언트가 앞으로 사용할 playerId를 응답으로 넘겨준다.
     return Results.Ok(new
     {
@@ -64,23 +104,37 @@ app.MapPost("/connect", (ConnectRequest req) =>
 // 3) 현재 접속 중인 플레이어 목록 (/players)
 // ====================================================================
 
-app.MapGet("/players", () =>
+app.MapGet("/players", (ILogger<Program> logger) =>
 {
+    var players = SessionStore.Players.Values.ToList();
+
+    //[Debug] 현재 플레이어 수 + 간단 목록 로그
+    logger.LogInformation("[Players] count={Count}, players={Players}",
+        players.Count,
+        players.Select(p => new { p.PlayerId, p.PlayerName }));
+
     //SessionStore.Players.Values : Dictionary의 value들(PlayerSession 객체들)만 반환
     //Json 배열로 응답 -> 어케함? 어찌알고 함? 의문@@@
-    return Results.Ok(SessionStore.Players.Values);
+    return Results.Ok(players);
 });
 
 // ====================================================================
 // 4) 방 생성, 참가(/room/create, /room/join)
 // ====================================================================
 
-app.MapPost("/room/create", (CreateRoomRequest req) =>
+app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
 {
+    //[Debug] 방 생성 요청 로그
+    logger.LogInformation("[RoomCreate] request playerId={PlayerId}", req.PlayerId);
+
     // 1) playerId 존재하는지 확인
     if (!SessionStore.Players.ContainsKey(req.PlayerId))
+    {
+        //[Debug] 잘못된 playerId 로그
+        logger.LogWarning("[RoomCreate] invalid playerId={PlayerId}", req.PlayerId);
         return Results.BadRequest(new { error = "Invalid playerId" });
-        
+    }
+
     // 2) 새 방 객체 생성
     var room = new GameRoom //var는 뭐냐? @@@
     {
@@ -97,6 +151,10 @@ app.MapPost("/room/create", (CreateRoomRequest req) =>
     // 5) RoomStore에 방 등록 (roomID -> GameRoom 객체 매핑)
     RoomStore.Rooms[room.RoomId] = room;
 
+    //[Debug] 생성된 방 정보 로그
+    logger.LogInformation("[RoomCreate] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}",
+        room.RoomId, room.InviteCode, string.Join(",", room.Players), room.MaxPlayers);
+
     // 6) 클라이언트에게 방 정보와 초대코드 알려주기
     return Results.Ok(new
     {
@@ -110,36 +168,58 @@ app.MapPost("/room/create", (CreateRoomRequest req) =>
 });
 
 // 방 입장 (/room/join)
-app.MapPost("/room/join", (JoinRoomByCodeRequest req) =>
+app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =>
 {
+    //[Debug] 방 입장 요청 로그
+    logger.LogInformation("[RoomJoin] request inviteCode={InviteCode}, playerId={PlayerId}",
+        req.InviteCode, req.PlayerId);
+
     // 1) 초대코드로 방 찾기 (대소문자 무시)
     var room = RoomStore.Rooms.Values
         .FirstOrDefault(r =>
             string.Equals(r.InviteCode, req.InviteCode, StringComparison.OrdinalIgnoreCase));
 
     if (room == null)
+    {
+        //[Debug] 방 없음 로그
+        logger.LogWarning("[RoomJoin] room not found for inviteCode={InviteCode}", req.InviteCode);
         return Results.NotFound(new { error = "Room not found" });
+    }
 
     // 2) playerId가 방에 존재하는지 확인
     if (room.Players.Contains(req.PlayerId)) // 있으면 그냥 ok 반환
     {
+        //[Debug] 이미 방에 있는 플레이어 로그
+        logger.LogInformation("[RoomJoin] player already in room roomId={RoomId}, playerId={PlayerId}",
+            room.RoomId, req.PlayerId);
+
         return Results.Ok(new
         {
             status = "ok",
             room.RoomId,
             room.InviteCode,
         });
-    }     
+    }
+
     // 여기까지 왔다는 건, 아직 방에 안 들어간 새 플레이어라는 뜻
     // 3) 방이 가득 찼으면 결과 리턴
     if (room.IsFull)
+    {
+        //[Debug] 방 가득 참 로그
+        logger.LogWarning("[RoomJoin] room full roomId={RoomId}, players={Players}",
+            room.RoomId, string.Join(",", room.Players));
         return Results.BadRequest(new { error = "Room is full" });
+    }
 
     // 4) 아니면 플레이어를 방에 추가
     room.Players.Add(req.PlayerId);
 
     if (room.CurrentTurn == null && room.Players.Count > 0)
         room.CurrentTurn = room.Players[0];
+
+    //[Debug] 방 입장 성공 로그
+    logger.LogInformation("[RoomJoin] joined roomId={RoomId}, inviteCode={InviteCode}, players={Players}, currentTurn={CurrentTurn}",
+        room.RoomId, room.InviteCode, string.Join(",", room.Players), room.CurrentTurn);
 
     return Results.Ok(new
     {
@@ -153,11 +233,22 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req) =>
 // 5) 방 상태 조회 (/room/state/{roomId})
 // ====================================================================
 
-app.MapGet("/room/state/{roomId}", (string roomId) =>
+app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
 {
+    //[Debug] 방 상태 조회 요청 로그
+    logger.LogInformation("[RoomState] request roomId={RoomId}", roomId);
+
     // roomId로 방 찾기 (TryGetValue: 있으면 true, 없으면 false)
     if (!RoomStore.Rooms.TryGetValue(roomId, out var room))
+    {
+        //[Debug] 방 없음 로그
+        logger.LogWarning("[RoomState] room not found roomId={RoomId}", roomId);
         return Results.NotFound(new { error = "Room not found" });
+    }
+
+    //[Debug] 방 상태 응답 로그
+    logger.LogInformation("[RoomState] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, isFull={IsFull}",
+        room.RoomId, room.InviteCode, string.Join(",", room.Players), room.IsFull);
 
     // GameRoom 전체를 그대로 돌려주는 대신 필요한 필드만 선택해서 익명 객체로 반환
     return Results.Ok(new
@@ -176,19 +267,41 @@ app.MapGet("/room/state/{roomId}", (string roomId) =>
 // 5-1) 게임 시작 (/game/start)
 // ====================================================================
 
-app.MapPost("/game/start", (GameStartRequest req) =>
+app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
 {
+    //[Debug] 게임 시작 요청 로그
+    logger.LogInformation("[GameStart] request roomId={RoomId}, playerId={PlayerId}",
+        req.RoomId, req.PlayerId);
+
     if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
+    {
+        //[Debug] 방 없음 로그
+        logger.LogWarning("[GameStart] room not found roomId={RoomId}", req.RoomId);
         return Results.BadRequest(new { error = "Room not found" });
+    }
 
     if (!room.Players.Contains(req.PlayerId))
+    {
+        //[Debug] 방에 없는 플레이어 로그
+        logger.LogWarning("[GameStart] player not in room roomId={RoomId}, playerId={PlayerId}",
+            req.RoomId, req.PlayerId);
         return Results.BadRequest(new { error = "Player not in room" });
+    }
 
     if (room.Players.Count < 2)
+    {
+        //[Debug] 인원 부족 로그
+        logger.LogWarning("[GameStart] not enough players roomId={RoomId}, count={Count}",
+            req.RoomId, room.Players.Count);
         return Results.BadRequest(new { error = "Need at least 2 players to start" });
+    }
 
     if (room.GameStarted)
+    {
+        //[Debug] 이미 시작된 게임 로그
+        logger.LogInformation("[GameStart] already started roomId={RoomId}", req.RoomId);
         return Results.BadRequest(new { error = "Game already started" });
+    }
 
     // 턴 순서를 랜덤으로 섞기
     // ⚝RandomNumberGenerator: 암호학적으로 안전한 난수 생성기
@@ -201,6 +314,13 @@ app.MapPost("/game/start", (GameStartRequest req) =>
     room.TurnOrder = shuffled;
     room.CurrentTurn = room.TurnOrder[0];    // 첫 번째 플레이어부터 시작    
     room.GameStarted = true;
+
+    //[Debug] 턴 순서/첫 플레이어 로그
+    logger.LogInformation("[GameStart] started roomId={RoomId}, players={Players}, turnOrder={TurnOrder}, firstPlayer={FirstPlayer}",
+        room.RoomId,
+        string.Join(",", room.Players),
+        string.Join(",", room.TurnOrder),
+        room.CurrentTurn);
 
     // 클라이언트들에게 턴 순서와 첫 플레이어 정보를 알려준다
     return Results.Ok(new
@@ -215,104 +335,9 @@ app.MapPost("/game/start", (GameStartRequest req) =>
 });
 
 // ====================================================================
-// 6) 한 턴 진행 (/game/move)
-//    - 지금은 "턴만 바꾸는 로직"만 존재
-//    - 나중에 여기에서 실제 Dot&Box 보드 판정 로직 호출 가능
+// (현재 비활성화된 엔드포인트들: /game/move, /game/point, /game/points)
+// 필요해지면 이쪽에도 같은 패턴으로 logger 주입해서 //[Debug] 찍으면 됨
 // ====================================================================
-
-// app.MapPost("/game/move", (MoveRequest req) =>
-// {
-//     if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
-//         return Results.BadRequest(new { error = "Room not found" });
-
-//     if (!room.GameStarted)
-//         return Results.BadRequest(new { error = "Game not started" });
-    
-//     // 현재 턴이 아닌 사람이 호출하면 거절
-//     if (room.CurrentTurn != req.PlayerId)
-//         return Results.BadRequest(new { error = "Not your turn" });
-
-//     // TurnOrder에서 현재 플레이어의 인덱스 찾기
-//     int currentIndex = room.TurnOrder.IndexOf(room.CurrentTurn);
-//     // 다음 플레이어 인덱스 계산 (+1 하다가 마지막이면 처음으로 돌아감) -> 순환 구조로 턴 부여
-//     int nextIndex = (currentIndex + 1) % room.TurnOrder.Count;
-//     string nextTurn = room.TurnOrder[nextIndex];
-//     room.CurrentTurn = nextTurn;
-
-//     return Results.Ok(new
-//     {
-//         status = "ok",
-//         room.RoomId,
-//         room.CurrentTurn
-//     });
-// });
-
-// 7) 게임 좌표 찍기 (/game/point)
-// app.MapPost("/game/point", (GamePointRequest req) =>
-// {
-//     if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
-//         return Results.BadRequest(new { error = "Room not found" });
-
-//     if (!room.Players.Contains(req.PlayerId))
-//         return Results.BadRequest(new { error = "Player not in room" });
-
-//     if (!room.GameStarted)
-//         return Results.BadRequest(new { error = "Game not started" });
-
-//     var ev = new GamePointEvent
-//     {
-//         Seq = room.NextSeq++,
-//         PlayerId = req.PlayerId,
-//         X = req.X,
-//         Y = req.Y,
-//         CreatedAt = DateTime.UtcNow
-//     };
-
-//     room.Events.Add(ev);
-
-//     return Results.Ok(new
-//     {
-//         status = "ok",
-//         roomId = room.RoomId,
-//         point = new
-//         {
-//             ev.Seq,
-//             ev.PlayerId,
-//             ev.X,
-//             ev.Y,
-//             ev.CreatedAt
-//         }
-//     });
-// });
-
-// // 8) 게임 좌표 이벤트 조회 (/game/points?roomId=...&afterSeq=...)
-// app.MapGet("/game/points", (string roomId, long? afterSeq) =>
-// {
-//     if (!RoomStore.Rooms.TryGetValue(roomId, out var room))
-//         return Results.BadRequest(new { error = "Room not found" });
-
-//     long seq = afterSeq ?? 0;
-
-//     var events = room.Events
-//         .Where(e => e.Seq > seq)
-//         .OrderBy(e => e.Seq)
-//         .Take(100) // 너무 많이 한 번에 안 보내려고 제한
-//         .Select(e => new
-//         {
-//             e.Seq,
-//             e.PlayerId,
-//             e.X,
-//             e.Y,
-//             e.CreatedAt
-//         })
-//         .ToList();
-
-//     return Results.Ok(new
-//     {
-//         roomId = room.RoomId,
-//         events
-//     });
-// });
 
 app.Run();
 
@@ -374,25 +399,6 @@ public class GameRoom
     public string? CurrentTurn { get; set;  } //현재 턴인 플레이어 ID (게임 시작 전에는 null)
 }
 
-// 좌표 이벤트 하나 발생~!!
-// public class GamePointEvent
-// {
-//     public long Seq { get; set; }
-//     public string PlayerId { get; set; } = default!;
-//     public int X { get; set; }
-//     public int Y { get; set; }
-//     public DateTime CreatedAt { get; set; }
-// }
-
-// 게임 좌표 전송 요청
-// public class GamePointRequest
-// {
-//     public string RoomId { get; set; } = default!;
-//     public string PlayerId { get; set; } = default!;
-//     public int X { get; set; }
-//     public int Y { get; set; }
-// }
-
 // (/connect 요청 Body 모델)
 public class ConnectRequest
 {
@@ -411,21 +417,6 @@ public class JoinRoomByCodeRequest
     public string PlayerId { get; set; } = default!;
     public string InviteCode { get; set; } = default!;
 }
-
-// // (/game/move 요청 Body 모델)
-// public class MoveRequest
-// {
-//     public string RoomId { get; set; } = default!;
-//     public string PlayerId { get; set; } = default!;
-
-//     // 선 시작점
-//     public int X1 { get; set; }
-//     public int Y1 { get; set; }
-
-//     // 선 끝점
-//     public int X2 { get; set; }
-//     public int Y2 { get; set; }
-// }
 
 // 초대 코드 생성 유틸
 public static class InviteCodeGenerator
@@ -453,4 +444,3 @@ public class GameStartRequest
     public string RoomId { get; set; } = default!;
     public string PlayerId { get; set; } = default!;
 }
-
