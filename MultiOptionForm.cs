@@ -93,7 +93,7 @@ namespace DotsAndBoxes
             txtRoomCode.ForeColor = System.Drawing.Color.Gray;
             txtRoomCode.Location = new System.Drawing.Point(60, 380);
             txtRoomCode.Width = 280;
-
+            
             // Placeholder 기능
             txtRoomCode.GotFocus += (s, e) =>
             {
