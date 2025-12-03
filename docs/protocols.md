@@ -34,16 +34,16 @@
 
 ### Request:
 * HTTP Raw 예시 
-    ```http
-    GET /health HTTP/1.1
-    Host: 43.201.40.98:8080
-    Accept: */*
-    ```
+  ```http
+  GET /health HTTP/1.1
+  Host: 43.201.40.98:8080
+  Accept: */*
+  ```
 
 * curl 예시
-    ```curl
-    curl http://43.201.40.98:8080/health
-    ```
+  ```curl
+  curl http://43.201.40.98:8080/health
+  ```
 
 ### Response:
 ```json
@@ -75,13 +75,13 @@
 
 ### Response:
 * 성공 (200 OK)
-    ```json
-    {
-      "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
-      "playerName": "seonseo",
-      "connectedAt": "2025-11-27T01:23:45.678Z"
-    }
-    ```
+  ```json
+  {
+    "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+    "playerName": "seonseo",
+    "connectedAt": "2025-11-27T01:23:45.678Z"
+  }
+  ```
     | 필드명       | 타입     | 설명                        |
     | ----------- | ------ | ------------------------- |
     | playerId    | string | 서버에서 발급한 고유 ID (문자열)|
@@ -90,10 +90,10 @@
 
 * 실패 (400)
     
-    ```json
-    // playerName이 공백이거나 null, 빈 문자열인 경우
-    { "error": "playerName is required" }
-    ```
+  ```json
+  // playerName이 공백이거나 null, 빈 문자열인 경우
+  { "error": "playerName is required" }
+  ```
 ------
 
 ## 3. 현재 접속 플레이어 조회 (GET /players)
@@ -156,7 +156,7 @@ curl http://43.201.40.98:8080/players
 
 ### Response:
 * 성공 (200 OK)
-    ```json
+  ```json
   {
     "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
     "inviteCode": "AB3F9Z",
@@ -230,8 +230,10 @@ curl http://43.201.40.98:8080/players
   ```json
   // 1) playerId가 유효하지 않을 때 - 404 Bad Request
   { "error": "Invalid playerId" }
+
   // 2) 초대 코드에 해당하는 방이 없을 때 - 404 Not Found
   { "error": "Room not found" }
+
   // 3) 방이 가득 찼을 때 - 404 Bad Request 
   { "error": "Room is full" }
   ```
@@ -264,17 +266,17 @@ curl http://43.201.40.98:8080/players
 
 ### Response:
 * 성공 (200 OK)
-    ```json
-    {
-      "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
-      "inviteCode": "AB3F9Z",
-      "players": [
-        "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
-        "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
-      ],
-      "isFull": false
-    }
-    ```
+  ```json
+  {
+    "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
+    "inviteCode": "AB3F9Z",
+    "players": [
+      "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+      "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
+    ],
+    "isFull": false
+  }
+  ```
     | 필드명       | 타입      | 설명                                           |
     | ---------- | -------- | -------------------------------------         |
     | roomId     | string   | 방 고유 ID                                      |
@@ -289,3 +291,71 @@ curl http://43.201.40.98:8080/players
     ```
 ---
 
+## 7. 게임 시작 (POST /game/start)
+
+방에 최소 2명 이상이 있고, 게임이 아직 시작되지 않은 경우 게임을 시작하고 턴 순서 및 첫 플레이어 정보를 반환한다.  
+
+| 속성                 | 내용                 |
+| ------------------ | ------------------ |
+| **Method**         | `POST`             |
+| **Path**           | `/game/start`      |
+| **Content-Type**   | `application/json` |
+| **Request Body**   | `GameStartRequest` |
+| **성공 HTTP Status** | `200 OK`           |
+| **실패 HTTP Status** | `400 Bad Request`  |
+
+### Request Body: 
+```json
+{
+  "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
+  "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3"
+}
+```
+| 필드명      | 타입     | 필수 | 설명                   |
+| -------- | ------ | -- | -------------------- |
+| roomId   | string | O  | 게임을 시작할 방 ID         |
+| playerId | string | O  | 게임 시작 요청을 보낸 플레이어 ID |
+
+### Response:
+* 성공 (200 OK)
+  ```json
+    {
+    "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
+    "inviteCode": "AB3F9Z",
+    "players": [
+      "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+      "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
+    ],
+    "turnOrder": [
+      "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
+      "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3"
+    ],
+    "firstPlayer": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
+    "currentTurn": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
+  }
+  ```
+    
+  | 필드명         | 타입       | 설명                                     |
+  | ----------- | -------- | -------------------------------------- |
+  | roomId      | string   | 방 ID                                   |
+  | inviteCode  | string   | 방 초대 코드                                |
+  | players     | string[] | 방에 속한 플레이어 ID 목록                       |
+  | turnOrder   | string[] | 이번 게임의 턴 순서                            |
+  | firstPlayer | string   | 첫 턴을 진행할 플레이어 ID                       |
+  | currentTurn | string   | 현재 턴인 플레이어 ID (게임 시작 직후 = firstPlayer) |
+
+* 실패 (400 Bad Request)
+  ```json
+  // 1) 방을 찾을 수 없는 경우
+  { "error": "Room not found" }
+
+  // 2) 요청한 플레이어가 방에 없음
+  { "error": "Player not in room" }
+
+  // 3) 플레이어 수가 2명 미만인 경우
+  { "error": "Need at least 2 players to start" }
+
+  // 4) 이미 게임이 시작 된 경우
+  { "error": "Game already started" }
+  ```
+  

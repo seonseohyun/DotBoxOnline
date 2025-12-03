@@ -136,7 +136,7 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
     }
 
     // 2) 새 방 객체 생성
-    var room = new GameRoom //var는 뭐냐? @@@
+    var room = new GameRoom
     {
         RoomId = Guid.NewGuid().ToString("N"),      // 고유한 방 ID 생성
         InviteCode = InviteCodeGenerator.Generate(6)// 6자리 초대코드 생성
@@ -341,7 +341,6 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
 
 app.Run();
 
-
 // ====================================================================
 // ---------------- 밑에는 타입 정의 구역 ----------------
 // ====================================================================
@@ -444,3 +443,6 @@ public class GameStartRequest
     public string RoomId { get; set; } = default!;
     public string PlayerId { get; set; } = default!;
 }
+// 게임 결과창으로 넘어가면 서버에게 게임 끝났다고 알려줘야됨
+// 턴은 방장부터 시작해서 먼저 들어온사람이 선~ // -> 내 순서 아닌경우 못하게끔 
+// 좌표 전달 어떻게 할건지? 
