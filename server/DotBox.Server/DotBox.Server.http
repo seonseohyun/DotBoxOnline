@@ -1,10 +1,10 @@
 ### 1) 헬스 체크
-GET http://localhost:5217/health
+GET http://43.201.40.98:8080/health
 
 
 ### 2) 플레이어1 접속
-#P1: 6b73370a06264c6faf3fb926684e4d36
-POST http://localhost:5217/connect
+#P1: 6b0795ff0f0f4c74ba693525f40a813c
+POST http://43.201.40.98:8080/connect
 Content-Type: application/json
 
 {
@@ -12,8 +12,8 @@ Content-Type: application/json
 }
 
 ### 3) 플레이어2 접속
-#P2: c494422077a343909ab4aca9ee317709
-POST http://localhost:5217/connect
+#P2: f76726e5347b47bcb7993bcc1a74eca4
+POST http://43.201.40.98:8080/connect
 Content-Type: application/json
 
 {
@@ -22,7 +22,7 @@ Content-Type: application/json
 
 ### 4) 플레이어3 접속
 #P3: 1777a261358640f187711363c8cf8f91
-POST http://localhost:5217/connect
+POST http://43.201.40.98:8080/connect
 Content-Type: application/json
 
 {
@@ -30,28 +30,28 @@ Content-Type: application/json
 }
 
 ### 5) 방 생성
-# Room ID: 871b044dc1014f48a98013da6272ef93
-# Invite Code: KN43XC
+# Room ID: 583c43909867427fa12d821d54618af5
+# Invite Code: JYZ95G
 
-POST http://localhost:5217/room/create
+POST http://43.201.40.98:8080/room/create
 Content-Type: application/json
 
 {
-  "playerId": "6b73370a06264c6faf3fb926684e4d36"
+  "playerId": "6b0795ff0f0f4c74ba693525f40a813c"
 }
 
 
 ### 6) 방 입장 (플레이어2 초대코드로 입장)
-POST http://localhost:5217/room/join
+POST http://43.201.40.98:8080/room/join
 Content-Type: application/json
 
 {
-  "playerId": "c494422077a343909ab4aca9ee317709",
-  "inviteCode": "KN43XC"
+  "playerId": "f76726e5347b47bcb7993bcc1a74eca4",
+  "inviteCode": "JYZ95G"
 }
     
 ### 7) 방 입장 (플레이어3 초대코드로 입장)
-POST http://localhost:5217/room/join
+POST http://43.201.40.98:8080/room/join
 Content-Type: application/json
 
 {

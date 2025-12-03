@@ -136,10 +136,11 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
     }
 
     // 2) 새 방 객체 생성
-    var room = new GameRoom //var는 뭐냐? @@@
+    var room = new GameRoom
     {
         RoomId = Guid.NewGuid().ToString("N"),      // 고유한 방 ID 생성
-        InviteCode = InviteCodeGenerator.Generate(6)// 6자리 초대코드 생성
+        InviteCode = InviteCodeGenerator.Generate(6),// 6자리 초대코드 생성
+        HostId = req.PlayerId             // [NEW] 방장 = 방 만든 사람
     };
 
     // 3) 방 만든 사람은 자동으로 입장 (players 리스트에 추가)
@@ -152,8 +153,8 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
     RoomStore.Rooms[room.RoomId] = room;
 
     //[Debug] 생성된 방 정보 로그
-    logger.LogInformation("[RoomCreate] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}",
-        room.RoomId, room.InviteCode, string.Join(",", room.Players), room.MaxPlayers);
+    logger.LogInformation("[RoomCreate] roomId={RoomId}, hostId={HostId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}",
+        room.RoomId, room.HostId, room.InviteCode, string.Join(",", room.Players), room.MaxPlayers);
 
     // 6) 클라이언트에게 방 정보와 초대코드 알려주기
     return Results.Ok(new
@@ -166,6 +167,7 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
         room.CurrentTurn        //null 반환
     });
 });
+
 
 // 방 입장 (/room/join)
 app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =>
@@ -228,6 +230,96 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =
         room.InviteCode
     });
 });
+
+// ====================================================================
+// 4-1) 방 나가기 (/room/leave)
+// ====================================================================
+
+app.MapPost("/room/leave", (LeaveRoomRequest req, ILogger<Program> logger) =>
+{
+    logger.LogInformation("[RoomLeave] request roomId={RoomId}, playerId={PlayerId}",
+        req.RoomId, req.PlayerId);
+
+    if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
+    {
+        logger.LogWarning("[RoomLeave] room not found roomId={RoomId}", req.RoomId);
+        return Results.NotFound(new { error = "Room not found" });
+    }
+
+    if (!room.Players.Contains(req.PlayerId))
+    {
+        logger.LogWarning("[RoomLeave] player not in room roomId={RoomId}, playerId={PlayerId}",
+            req.RoomId, req.PlayerId);
+        return Results.BadRequest(new { error = "Player not in room" });
+    }
+
+    // 플레이어 제거
+    room.Players.Remove(req.PlayerId);
+    room.TurnOrder?.Remove(req.PlayerId);
+
+    bool isOwnerChanged = false;
+    string? newOwnerId = null;
+
+    // 방장이 나갔으면 -> 남은 사람 중 첫 번째를 새 방장으로
+    if (room.HostId == req.PlayerId && room.Players.Count > 0)
+    {
+        room.HostId = room.Players[0];
+        isOwnerChanged = true;
+        newOwnerId = room.HostId;
+    }
+
+    // 아무도 안 남으면 방 삭제
+    if (room.Players.Count == 0)
+    {
+        RoomStore.Rooms.TryRemove(req.RoomId, out _);
+
+        logger.LogInformation("[RoomLeave] room empty, removed roomId={RoomId}", req.RoomId);
+
+        return Results.Ok(new
+        {
+            roomId = req.RoomId,
+            playerId = req.PlayerId,
+            players = Array.Empty<string>(),
+            currentTurn = (string?)null,
+            isOwnerChanged = false,
+            newOwnerId = (string?)null
+        });
+    }
+
+    // 현재 턴인 애가 나갔으면 턴 다시 설정
+    if (room.CurrentTurn == req.PlayerId)
+    {
+        if (room.TurnOrder != null && room.TurnOrder.Count > 0)
+        {
+            // 그냥 턴 순서 리스트 첫 번째로 돌려버리기
+            room.CurrentTurn = room.TurnOrder[0];
+        }
+        else if (room.Players.Count > 0)
+        {
+            // TurnOrder가 아직 안 세팅돼있으면 Players[0] 사용
+            room.CurrentTurn = room.Players[0];
+        }
+        else
+        {
+            room.CurrentTurn = null;
+        }
+    }
+
+    logger.LogInformation("[RoomLeave] success roomId={RoomId}, players={Players}, currentTurn={CurrentTurn}, isOwnerChanged={IsOwnerChanged}, newOwnerId={NewOwnerId}",
+        room.RoomId, string.Join(",", room.Players), room.CurrentTurn, isOwnerChanged, newOwnerId);
+
+    return Results.Ok(new
+    {
+        roomId = room.RoomId,
+        playerId = req.PlayerId,
+        players = room.Players,
+        currentTurn = room.CurrentTurn,
+        isOwnerChanged,
+        newOwnerId
+    });
+});
+
+
 
 // ====================================================================
 // 5) 방 상태 조회 (/room/state/{roomId})
@@ -307,17 +399,20 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
     // ⚝RandomNumberGenerator: 암호학적으로 안전한 난수 생성기
     // ⚝OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)) 로 랜덤 셔플 효과
 
-    var shuffled = room.Players
-        .OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue))
+    // 방장 정보가 HostId에 있고, Players 리스트는 [방장, 2번, 3번] 순으로 유지된다고 가정
+    var ordered = room.Players
+        .OrderBy(p => p == room.HostId ? 0 : 1)            // 방장 먼저
+        .ThenBy(p => room.Players.IndexOf(p))              // 그 다음 입장 순서
         .ToList();
 
-    room.TurnOrder = shuffled;
-    room.CurrentTurn = room.TurnOrder[0];    // 첫 번째 플레이어부터 시작    
+    room.TurnOrder = ordered;
+    room.CurrentTurn = room.TurnOrder[0];    // 항상 방장부터
     room.GameStarted = true;
 
     //[Debug] 턴 순서/첫 플레이어 로그
-    logger.LogInformation("[GameStart] started roomId={RoomId}, players={Players}, turnOrder={TurnOrder}, firstPlayer={FirstPlayer}",
+    logger.LogInformation("[GameStart] started roomId={RoomId}, hostId={HostId}, players={Players}, turnOrder={TurnOrder}, firstPlayer={FirstPlayer}",
         room.RoomId,
+        room.HostId,
         string.Join(",", room.Players),
         string.Join(",", room.TurnOrder),
         room.CurrentTurn);
@@ -341,9 +436,8 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
 
 app.Run();
 
-
 // ====================================================================
-// ---------------- 밑에는 타입 정의 구역 ----------------
+//                              타입 정의 구역
 // ====================================================================
 
 // 플레이어 세션 정보
@@ -375,15 +469,18 @@ public class GameRoom
     public string RoomId { get; set; } = default!;
     public string InviteCode { get; set; } = default!;
 
+    // [NEW] 방장 ID
+    public string HostId { get; set; } = default!;
+
     // 방 안 플레이어 ID들 (최대 3명)
     public List<string> Players { get; set; } = new();
 
-    public int MaxPlayers { get; set; } = 3;  //?@@ 왜 public으로 해놨지? 바꿀일 없을텐데 지짜 궁금
+    public int MaxPlayers { get; set; } = 3;  
 
     // 게임이 시작되었는지 여부
     public bool GameStarted { get; set; } = false;
 
-    // 랜덤으로 섞인 턴 순서 (playerId 리스트)
+    // 방장 + 입장 순서 기준 턴 순서 (playerId 리스트)
     public List<string> TurnOrder { get; set; } = null!; //null!이면 나중에 할당할 테니까 경고 무시 해줘 라는 뜻
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -440,6 +537,13 @@ public static class InviteCodeGenerator
 
 // (/game/start 요청 Body 모델)
 public class GameStartRequest
+{
+    public string RoomId { get; set; } = default!;
+    public string PlayerId { get; set; } = default!;
+}
+
+// (/room/leave 요청 Body 모델)
+public class LeaveRoomRequest
 {
     public string RoomId { get; set; } = default!;
     public string PlayerId { get; set; } = default!;
