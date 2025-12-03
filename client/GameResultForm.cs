@@ -20,7 +20,6 @@ namespace DotsAndBoxes
         // 외부에서 읽을 용도
         public GameResultAction Action { get; private set; } = GameResultAction.None;
 
-
         // 결과창에서 어떤 버튼 눌렀는지 구분용
         public enum GameResultAction
         {
@@ -34,6 +33,7 @@ namespace DotsAndBoxes
             InitializeComponent();
             BuildUI();
         }
+
         private void BuildUI()
         {
             // 폼 기본 설정
@@ -77,7 +77,7 @@ namespace DotsAndBoxes
         private void BtnRestart_Click(object sender, EventArgs e)
         {
             MainForm main = (MainForm)this.ParentForm;
-            main.LoadChildForm(new GamePlayForm()); // 새 게임 시작
+            main.LoadChildForm(new GamePlayForm(5)); // 멀티 모드 보드 크기 5
         }
 
         private void BtnMain_Click(object sender, EventArgs e)
