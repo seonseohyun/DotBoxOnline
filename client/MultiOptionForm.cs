@@ -150,7 +150,7 @@ namespace DotsAndBoxes
 
                 // 로비로 이동 (초대코드 전달)
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new MultiLobbyForm(roomRes.inviteCode));
+                main.LoadChildForm(new MultiLobbyForm(roomRes.inviteCode, roomRes.players.ToList()));
             }
             catch (Exception ex)
             {
@@ -199,9 +199,13 @@ namespace DotsAndBoxes
             {
                 var joinRes = await ServerApi.JoinRoomAsync(AppSession.PlayerId, code);
 
+                // joinRes.players 가 null 이어도 안전하게 처리
+                var players = (joinRes.players ?? new[] { AppSession.PlayerId }).ToList();
+
+
                 // 성공 시 로비로 이동
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new MultiLobbyForm(joinRes.inviteCode));
+                main.LoadChildForm(new MultiLobbyForm(joinRes.inviteCode, joinRes.players.ToList()));
             }
             catch (Exception ex)
             {

@@ -25,10 +25,12 @@ namespace DotsAndBoxes
             BuildUI();
         }
 
-        // 초대코드만 받는 생성자 
-        public MultiLobbyForm(string inviteCode) : this()
+        // 초대코드 + playerId 같이 받는 생성자
+        public MultiLobbyForm(string inviteCode, List<string> players) : this()
         {
             txtInviteCode.Text = inviteCode;
+            // 서버에서 받은 players 리스트
+            UpdatePlayers(players);
         }
 
         private void BuildUI()
@@ -117,11 +119,12 @@ namespace DotsAndBoxes
             this.Controls.Add(btnExit);
         }
 
-        public void UpdatePlayers(string p1, string p2, string p3)
+        // 플레이어 리스트
+        public void UpdatePlayers(List<string> players)
         {
-            if (!string.IsNullOrEmpty(p1)) lblPlayer1.Text = p1;
-            if (!string.IsNullOrEmpty(p2)) lblPlayer2.Text = p2;
-            if (!string.IsNullOrEmpty(p3)) lblPlayer3.Text = p3;
+            lblPlayer1.Text = players.Count > 0 ? players[0] : "Waiting for Player1...";
+            lblPlayer2.Text = players.Count > 1 ? players[1] : "Waiting for Player2...";
+            lblPlayer3.Text = players.Count > 2 ? players[2] : "Waiting for Player3...";
         }
 
         private void BtnStart_Click(object sender, EventArgs e)

@@ -32,6 +32,10 @@ namespace DotsAndBoxes
         public string status { get; set; }    // "ok"
         public string roomId { get; set; }
         public string inviteCode { get; set; }
+        public string[] players { get; set; }   // ← 이 프로퍼티가 반드시 있어야 joinRes.players가 컴파일됨
+        public int maxPlayers { get; set; }
+        public bool isFull { get; set; }
+        public string currentTurn { get; set; }
     }
 
     // /room/state 응답 DTO
@@ -51,6 +55,7 @@ namespace DotsAndBoxes
         private static readonly HttpClient httpClient = new HttpClient
         {
             BaseAddress = new Uri("http://43.201.40.98:8080")
+            //BaseAddress = new Uri("http://localhost:5217")
         };
 
 
