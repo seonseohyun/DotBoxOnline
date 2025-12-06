@@ -5,6 +5,12 @@ using System.Text;                   // StringBuilder 사용 위해 필요 - 문
 
 // ⚝WebApplication: ASP.NET Core에서 제공하는 HTTP 서버 본체
 var builder = WebApplication.CreateBuilder(args);  //서버 설정/환경구성
+
+// 콘솔 로깅 강제 활성화 + 로그 레벨 설정
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
+
 var app = builder.Build();                         //서버 본체 생성
 
 // ====================================================================
@@ -227,7 +233,8 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =
     {
         status = "ok",
         room.RoomId,
-        room.InviteCode
+        room.InviteCode,
+        Players = room.Players
     });
 });
 
@@ -320,7 +327,6 @@ app.MapPost("/room/leave", (LeaveRoomRequest req, ILogger<Program> logger) =>
 });
 
 
-
 // ====================================================================
 // 5) 방 상태 조회 (/room/state/{roomId})
 // ====================================================================
@@ -395,10 +401,6 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
         return Results.BadRequest(new { error = "Game already started" });
     }
 
-    // 턴 순서를 랜덤으로 섞기
-    // ⚝RandomNumberGenerator: 암호학적으로 안전한 난수 생성기
-    // ⚝OrderBy(_ => RandomNumberGenerator.GetInt32(int.MaxValue)) 로 랜덤 셔플 효과
-
     // 방장 정보가 HostId에 있고, Players 리스트는 [방장, 2번, 3번] 순으로 유지된다고 가정
     var ordered = room.Players
         .OrderBy(p => p == room.HostId ? 0 : 1)            // 방장 먼저
@@ -428,11 +430,6 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
         CurrentTurn = room.CurrentTurn
     });
 });
-
-// ====================================================================
-// (현재 비활성화된 엔드포인트들: /game/move, /game/point, /game/points)
-// 필요해지면 이쪽에도 같은 패턴으로 logger 주입해서 //[Debug] 찍으면 됨
-// ====================================================================
 
 app.Run();
 
