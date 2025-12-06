@@ -5,6 +5,12 @@ using System.Text;                   // StringBuilder 사용 위해 필요 - 문
 
 // ⚝WebApplication: ASP.NET Core에서 제공하는 HTTP 서버 본체
 var builder = WebApplication.CreateBuilder(args);  //서버 설정/환경구성
+
+// 콘솔 로깅 강제 활성화 + 로그 레벨 설정
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.SetMinimumLevel(LogLevel.Information);
+
 var app = builder.Build();                         //서버 본체 생성
 
 // ====================================================================
