@@ -18,6 +18,10 @@ namespace DotsAndBoxes
         private Label lblPlayer3;
         private Button btnStart;
         private Button btnExit;
+        private string _roomId;      // 방 ID
+        private string _myPlayerId;  // 내 playerId
+        private System.Windows.Forms.Timer _lobbyTimer; // 방장이외 유저들 게임화면 넘어가게하기 위함
+
 
         public MultiLobbyForm()
         {
@@ -25,12 +29,18 @@ namespace DotsAndBoxes
             BuildUI();
         }
 
-        // 초대코드 + playerId 같이 받는 생성자
-        public MultiLobbyForm(string inviteCode, List<string> players) : this()
+        // 방 정보 + 내 playerId + 초대코드 + players 리스트 받는 생성자
+        public MultiLobbyForm(string roomId, string myPlayerId, string inviteCode, List<string> players) : this()
         {
+            _roomId = roomId;
+            _myPlayerId = myPlayerId;
             txtInviteCode.Text = inviteCode;
+
             // 서버에서 받은 players 리스트
             UpdatePlayers(players);
+
+            // 로비 상태 주기적으로 체크(일반유저 게임시작으로 넘어가기)
+            StartLobbyTimer();
         }
 
         private void BuildUI()
@@ -119,24 +129,140 @@ namespace DotsAndBoxes
             this.Controls.Add(btnExit);
         }
 
+        // 타이머 세팅
+        private void StartLobbyTimer()
+        {
+            _lobbyTimer = new System.Windows.Forms.Timer();
+            _lobbyTimer.Interval = 1000; // 1초마다
+            _lobbyTimer.Tick += async (s, e) => await RefreshRoomStateAsync();
+            _lobbyTimer.Start();
+        }
+
         // 플레이어 리스트
         public void UpdatePlayers(List<string> players)
         {
+            // 1) 플레이어 라벨 업데이트
             lblPlayer1.Text = players.Count > 0 ? players[0] : "Waiting for Player1...";
             lblPlayer2.Text = players.Count > 1 ? players[1] : "Waiting for Player2...";
             lblPlayer3.Text = players.Count > 2 ? players[2] : "Waiting for Player3...";
+
+            // 2) 방장 여부 판단 (players[0] = Host)
+            bool iAmHost = (players.Count > 0 && players[0] == _myPlayerId);
+
+            // 3) 방장일 때만 Start 버튼 활성화
+            btnStart.Enabled = iAmHost;
+
+            // 4) 방장 표시 (Player1 라벨 배경색만 변경)
+            if (players.Count > 0)
+            {
+                lblPlayer1.BackColor = Color.LightYellow;
+                lblPlayer1.Font = new Font(lblPlayer1.Font, FontStyle.Bold);
+            }
+            else
+            {
+                lblPlayer1.BackColor = Color.White;
+                lblPlayer1.Font = new Font(lblPlayer1.Font, FontStyle.Regular);
+            }
         }
 
-        private void BtnStart_Click(object sender, EventArgs e)
+        // 시작버튼 클릭
+        private async void BtnStart_Click(object sender, EventArgs e)
         {
-            MainForm main = (MainForm)this.ParentForm;
-            main.LoadChildForm(new GamePlayForm(5)); // 멀티 모드 보드 크기 5
+            // 방장만 눌릴 수 있음 (UpdatePlayers에서 btnStart.Enabled = iAmHost로 관리 중)
+            btnStart.Enabled = false;
+
+            try
+            {
+                // 1) 서버에 게임 시작 요청
+                var startRes = await ServerApi.GameStartAsync(_roomId, _myPlayerId);
+
+                // 2) 방장 자신의 화면은 바로 게임 화면으로 전환
+                MainForm main = (MainForm)this.ParentForm;
+                main.LoadChildForm(new GamePlayForm(5));
+            }
+            catch (Exception ex)
+            {
+                // 에러 (2명 미만, 이미 시작됨 등) -> 메시지 띄우고 다시 활성화
+                MessageBox.Show(
+                    ex.Message,
+                    "게임 시작 실패",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+                btnStart.Enabled = true;
+            }
         }
 
-        private void BtnExit_Click(object sender, EventArgs e)
+        // 방장 아닌 유저 게임시작 (/room/state 조회 + 게임 시작 감지)
+        private async Task RefreshRoomStateAsync()
         {
-            MainForm main = (MainForm)this.ParentForm;
-            main.LoadChildForm(new HomeForm());
+            try
+            {
+                var state = await ServerApi.GetRoomStateAsync(_roomId);
+
+                var playersList = state.players != null
+                    ? state.players.ToList()
+                    : new List<string>();
+
+                // 플레이어 라벨/방장 표시, Start 버튼 Enable/Disable
+                UpdatePlayers(playersList);
+
+                // 내가 방장이면 여기서 끝 (타이머는 상태 표시만)
+                bool iAmHost = (playersList.Count > 0 && playersList[0] == _myPlayerId);
+                if (iAmHost)
+                    return;
+
+                // 방장이 아닌 사람만 "게임 시작" 감지
+                if (!string.IsNullOrEmpty(state.currentTurn))
+                {
+                    _lobbyTimer.Stop();
+
+                    MainForm main = (MainForm)this.ParentForm;
+                    main.LoadChildForm(new GamePlayForm(5));
+                }
+            }
+            catch
+            {
+                // 일시적 오류 무시
+            }
+        }
+
+        // 나가기버튼 클릭
+        private async void BtnExit_Click(object sender, EventArgs e)
+        {
+            // 중복 클릭 방지
+            btnExit.Enabled = false;
+
+            try
+            {
+                // 서버에 방 나가기 요청
+                var leaveRes = await ServerApi.LeaveRoomAsync(_roomId, _myPlayerId);
+
+                //  타이머 정리
+                if (_lobbyTimer != null)
+                {
+                    _lobbyTimer.Stop();
+                    _lobbyTimer.Dispose();
+                    _lobbyTimer = null;
+                }
+
+                // 홈 화면으로 이동
+                MainForm main = (MainForm)this.ParentForm;
+                main.LoadChildForm(new HomeForm());
+            }
+            catch (Exception ex)
+            {
+                // 실패 → 에러만 보여주고 로비에 그대로 남음
+                MessageBox.Show(
+                    ex.Message,
+                    "방 나가기 실패",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error
+                );
+
+                // 다시 눌러볼 수 있게 버튼 복구
+                btnExit.Enabled = true;
+            }
         }
     }
 }

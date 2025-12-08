@@ -150,7 +150,15 @@ namespace DotsAndBoxes
 
                 // 로비로 이동 (초대코드 전달)
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new MultiLobbyForm(roomRes.inviteCode, roomRes.players.ToList()));
+                //main.LoadChildForm(new MultiLobbyForm(roomRes.inviteCode, roomRes.players.ToList()));
+                main.LoadChildForm(
+                    new MultiLobbyForm(
+                        roomRes.roomId,          // 1) 방 ID  
+                        AppSession.PlayerId,     // 2) 내 playerId  
+                        roomRes.inviteCode,      // 3) 초대코드  
+                        roomRes.players.ToList() // 4) players 리스트  
+                    )
+                );
             }
             catch (Exception ex)
             {
@@ -197,15 +205,26 @@ namespace DotsAndBoxes
 
             try
             {
+                // 방 참가
                 var joinRes = await ServerApi.JoinRoomAsync(AppSession.PlayerId, code);
 
-                // joinRes.players 가 null 이어도 안전하게 처리
-                var players = (joinRes.players ?? new[] { AppSession.PlayerId }).ToList();
+                // 2) 참가에 성공했으니 해당 roomId의 현재 상태를 조회해서 players 가져오기
+                var state = await ServerApi.GetRoomStateAsync(joinRes.roomId);
 
+                var playersList = state.players != null
+                    ? state.players.ToList()
+                    : new List<string>();
 
-                // 성공 시 로비로 이동
+                // 3) 로비로 이동
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new MultiLobbyForm(joinRes.inviteCode, joinRes.players.ToList()));
+                main.LoadChildForm(
+                    new MultiLobbyForm(
+                        joinRes.roomId,          // 방 ID
+                        AppSession.PlayerId,     // 내 playerId
+                        joinRes.inviteCode,      // 초대 코드
+                        playersList              // /room/state 에서 가져온 players
+                    )
+                );
             }
             catch (Exception ex)
             {
