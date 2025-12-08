@@ -2,7 +2,7 @@
 
 | 구분 | 내용 |
 | :--- | :--- |
-| **최종 수정일** | 2025년 12월 03일 |
+| **최종 수정일** | 2025년 12월 08일 |
 | **작성자** | 선서현 |
 | **URL** | `http://43.201.40.98:8080` |
 
@@ -21,6 +21,36 @@
     { "error": "에러 메세지" }
     ```
   * HTTP Status Code는 상황에 따라 `400 Bad Request`, `404 Not Found` 등을 사용.
+  * **로그:** 모든 요청에 대해 `[REQ] 메서드/경로/쿼리`, 응답에 대해 `[RES] 상태코드/메서드/경로`를 서버 로그로 남깁니다.
+
+* **공통: playerInfos 필드:**  
+  방 관련 API 응답에서는 다음 두 가지 필드가 함께 내려옵니다.
+
+  ```json
+  {
+    "players": [
+      "player-id-1",
+      "player-id-2"
+    ],
+    "playerInfos": [
+      {
+        "playerId": "player-id-1",
+        "playerName": "플레이어1"
+      },
+      {
+        "playerId": "player-id-2",
+        "playerName": "플레이어2"
+      }
+    ]
+  }
+  ```
+  | 필드명                      | 타입       | 설명                            |
+  | ------------------------ | -------- | ----------------------------- |
+  | players                  | string[] | 방에 속한 플레이어의 `playerId` 목록     |
+  | playerInfos              | object[] | 각 플레이어의 ID와 이름 정보 목록          |
+  | playerInfos[].playerId   | string   | 플레이어 ID (`players` 배열의 값과 동일) |
+  | playerInfos[].playerName | string   | 플레이어 닉네임                      |
+
 ---
 
 ## 1. 서버 헬스 체크 (GET /health)
@@ -165,19 +195,28 @@ curl http://43.201.40.98:8080/players
     "players": [
       "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3"
     ],
+    "playerInfos": [
+      {
+        "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+        "playerName": "seonseo"
+      }
+    ],
     "maxPlayers": 3,
     "isFull": false,
     "currentTurn": null
   }
   ```
-  | 필드명        | 타입      | 설명                                        |
-  | ----------- | -------- | -----------------------------------------  |
-  | roomId      | string   | 고유한 방 ID (`Guid.NewGuid().ToString("N")`)|
-  | inviteCode  | string   | 초대 코드(영문+숫자, 혼동 문자 제거된 6자리)        |
-  | players     | string[] | 현재 방에 있는 playerId 목록 (생성자는 자동 입장)   |
-  | maxPlayers  | int      | 최대 플레이어 수(기본값 3)                       |
-  | isFull      | bool     | 현재 인원수가 `maxPlayers`에 도달했는지 여부       |
-  | currentTurn | string?  | 게임 시작 전이므로 항상 `null`                   |
+| 필드명                      | 타입          | 설명                                |
+| ------------------------ | ----------- | --------------------------------- |
+| roomId                   | string      | 방 ID                              |
+| inviteCode               | string      | 방 초대 코드                           |
+| players                  | string[]    | 방에 속한 플레이어 ID 목록                  |
+| playerInfos              | object[]    | 각 플레이어의 ID/이름 정보 목록               |
+| playerInfos[].playerId   | string      | 플레이어 ID                           |
+| playerInfos[].playerName | string      | 플레이어 닉네임                          |
+| maxPlayers               | int         | 최대 인원 수 (기본 3명)                   |
+| isFull                   | bool        | `players.length >= maxPlayers` 여부 |
+| currentTurn              | string|null | 현재 턴인 플레이어 ID (게임 시작 전에는 `null`)  |
 
 * 실패 (400)
   ```json
@@ -220,14 +259,30 @@ curl http://43.201.40.98:8080/players
   {
     "status": "ok",
     "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
-    "inviteCode": "AB3F9Z"
+    "inviteCode": "AB3F9Z",
+    "players": [
+      "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+      "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
+    ],
+    "playerInfos": [
+      {
+        "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+        "playerName": "seonseo"
+      },
+      {
+        "playerId": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
+        "playerName": "friend"
+      }
+    ]
   }
   ```
-  | 필드명       | 타입    | 설명                               |
-  | ---------- | ------ | -------------------------         |
-  | status     | string | 성공 시 `"ok"`                      |
-  | roomId     | string | 참가에 성공한 방 ID                   |
-  | inviteCode | string | 방의 초대 코드 (요청에 사용한 코드와 동일)  |
+  | 필드명         | 타입       | 설명                  |
+  | ----------- | -------- | ------------------- |
+  | status      | string   | 성공 시 항상 `"ok"`      |
+  | roomId      | string   | 방 ID                |
+  | inviteCode  | string   | 방 초대 코드             |
+  | players     | string[] | 방에 속한 플레이어 ID 목록    |
+  | playerInfos | object[] | 각 플레이어의 ID/이름 정보 목록 |
 
 * 실패 
   ```json
@@ -276,7 +331,14 @@ curl http://43.201.40.98:8080/players
     "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
     "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
     "players": [
-      "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"],
+      "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
+    ],
+    "playerInfos": [
+      {
+        "playerId": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
+        "playerName": "friend"
+      }
+    ],
     "currentTurn": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
     "isOwnerChanged": true,
     "newOwnerId": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
@@ -287,19 +349,21 @@ curl http://43.201.40.98:8080/players
     "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
     "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
     "players": [],
+    "playerInfos": [],
     "currentTurn": null,
     "isOwnerChanged": false,
     "newOwnerId": null
   }
   ```
-  | 필드명            | 타입          | 설명                                 |
-  | -------------- | ----------- | ---------------------------------- |
-  | roomId         | string      | 방 ID                               |
-  | playerId       | string      | 방에서 나간 플레이어 ID                     |
-  | players        | string[]    | 남아 있는 플레이어 ID 리스트                  |
-  | currentTurn    | string|null | 현재 턴 플레이어 ID (없으면 null)            |
-  | isOwnerChanged | bool        | 방장이 변경되었는지 여부                      |
-  | newOwnerId     | string|null | 새 방장 ID (방장이 안 바뀌었거나 방이 삭제되면 null) |
+  | 필드명            | 타입          | 설명                             |
+  | -------------- | ----------- | ------------------------------ |
+  | roomId         | string      | 방 ID                           |
+  | playerId       | string      | 방에서 나간 플레이어 ID                 |
+  | players        | string[]    | 방에 남아 있는 플레이어 ID 목록 (없으면 빈 배열) |
+  | playerInfos    | object[]    | 남은 플레이어들의 ID/이름 정보 목록          |
+  | currentTurn    | string|null | 현재 턴 플레이어 ID (없으면 null)        |
+  | isOwnerChanged | bool        | 방장이 변경되었는지 여부                  |
+  | newOwnerId     | string|null | 새 방장 ID (없으면 null)             |
 
 * 실패 
   ```json
@@ -346,15 +410,26 @@ curl http://43.201.40.98:8080/players
       "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
       "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
     ],
+    "playerInfos": [
+      {
+        "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+        "playerName": "seonseo"
+      },
+      {
+        "playerId": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
+        "playerName": "friend"
+      }
+    ],
     "isFull": false
   }
   ```
-    | 필드명       | 타입      | 설명                                           |
-    | ---------- | -------- | -------------------------------------         |
-    | roomId     | string   | 방 고유 ID                                      |
-    | inviteCode | string   | 방 초대 코드                                     |
-    | players    | string[] | 현재 방에 참가 중인 `playerId` 리스트               |
-    | isFull     | bool     | 현재 인원수가 `MaxPlayers`(기본 3명)에 도달했는지 여부 |
+  | 필드명         | 타입       | 설명                     |
+  | ----------- | -------- | ---------------------- |
+  | roomId      | string   | 방 ID                   |
+  | inviteCode  | string   | 방 초대 코드                |
+  | players     | string[] | 방에 속한 플레이어 ID 목록       |
+  | playerInfos | object[] | 각 플레이어의 ID/이름 정보 목록    |
+  | isFull      | bool     | 현재 인원이 최대 인원에 도달했는지 여부 |
 
 * 실패 (404 Not Found)
     ```json
