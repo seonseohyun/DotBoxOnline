@@ -162,13 +162,16 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
     logger.LogInformation("[RoomCreate] roomId={RoomId}, hostId={HostId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}",
         room.RoomId, room.HostId, room.InviteCode, string.Join(",", room.Players), room.MaxPlayers);
 
+    var playerInfos = PlayerMapper.ToPlayerInfos(room.Players);
+
     // 6) 클라이언트에게 방 정보와 초대코드 알려주기
     return Results.Ok(new
     {
         room.RoomId,            //방 ID
         room.InviteCode,        //초대 코드
         players = room.Players, //방에 있는 플레이어 ID 리스트
-        room.MaxPlayers,        //최대 플레이어 수 이거 줘야함? 어차피 세명 아님?@@@
+        playerInfos,             // 이름 포함 리스트
+        room.MaxPlayers,        //최대 플레이어 수 (3)
         room.IsFull,            //방이 가득 찼는지 여부
         room.CurrentTurn        //null 반환
     });
@@ -194,6 +197,8 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =
         return Results.NotFound(new { error = "Room not found" });
     }
 
+    var playerInfos = PlayerMapper.ToPlayerInfos(room.Players);
+
     // 2) playerId가 방에 존재하는지 확인
     if (room.Players.Contains(req.PlayerId)) // 있으면 그냥 ok 반환
     {
@@ -206,6 +211,8 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =
             status = "ok",
             room.RoomId,
             room.InviteCode,
+            players = room.Players,
+            playerInfos
         });
     }
 
@@ -221,9 +228,6 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =
 
     // 4) 아니면 플레이어를 방에 추가
     room.Players.Add(req.PlayerId);
-
-    if (room.CurrentTurn == null && room.Players.Count > 0)
-        room.CurrentTurn = room.Players[0];
 
     //[Debug] 방 입장 성공 로그
     logger.LogInformation("[RoomJoin] joined roomId={RoomId}, inviteCode={InviteCode}, players={Players}, currentTurn={CurrentTurn}",
@@ -345,8 +349,16 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
     }
 
     //[Debug] 방 상태 응답 로그
-    logger.LogInformation("[RoomState] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, isFull={IsFull}",
-        room.RoomId, room.InviteCode, string.Join(",", room.Players), room.IsFull);
+    logger.LogInformation(
+        "[RoomState] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, isFull={IsFull}, currentTurn={CurrentTurn}",
+        room.RoomId,
+        room.InviteCode,
+        string.Join(",", room.Players),
+        room.IsFull,
+        room.CurrentTurn
+    );
+
+    var playersInfos = PlayerMapper.ToPlayerInfos(room.Players);
 
     // GameRoom 전체를 그대로 돌려주는 대신 필요한 필드만 선택해서 익명 객체로 반환
     return Results.Ok(new
@@ -354,9 +366,9 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
         room.RoomId,
         room.InviteCode,
         players = room.Players,
-        // room.MaxPlayers,
-        // room.CurrentTurn,
-        // room.CreatedAt,
+        playersInfos,
+        room.MaxPlayers,
+        CurrentTurn = room.CurrentTurn,
         room.IsFull
     });
 });
@@ -419,13 +431,23 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
         string.Join(",", room.TurnOrder),
         room.CurrentTurn);
 
+    var playerInfos     = PlayerMapper.ToPlayerInfos(room.Players);
+    var turnOrderInfos  = PlayerMapper.ToPlayerInfos(room.TurnOrder);
+    
     // 클라이언트들에게 턴 순서와 첫 플레이어 정보를 알려준다
     return Results.Ok(new
     {
         room.RoomId,
         room.InviteCode,
+
+        // ID 기반 기존 필드
         players = room.Players,
         turnOrder = room.TurnOrder,
+
+        // 이름 포함 DTO 리스트 버전~!!
+        playerInfos,
+        turnOrderInfos,
+
         firstPlayer = room.TurnOrder[0],
         CurrentTurn = room.CurrentTurn
     });
@@ -452,6 +474,47 @@ public static class SessionStore
     public static ConcurrentDictionary<string, PlayerSession> Players { get; }
         = new();
 }
+
+// 클라이언트에 내려줄 플레이어 정보 DTO
+public class PlayerInfoDto
+{
+    public string PlayerId { get; set; } = default!;
+    public string PlayerName { get; set; } = default!;
+}
+
+// SessionStore에 있는 세션 -> DTO로 매핑
+public static class PlayerMapper
+{
+    public static List<PlayerInfoDto> ToPlayerInfos(IEnumerable<string> playerIds)
+    {
+        var result = new List<PlayerInfoDto>();
+
+        foreach (var id in playerIds)
+        {
+            if (SessionStore.Players.TryGetValue(id, out var session))
+            {
+                result.Add(new PlayerInfoDto
+                {
+                    PlayerId = session.PlayerId,
+                    PlayerName = session.PlayerName
+                });
+            }
+            else
+            {
+                // 세션에서 못 찾는 경우 대비 (이름 모르면 id만 전달)
+                result.Add(new PlayerInfoDto
+                {
+                    PlayerId = id,
+                    PlayerName = "(unknown)"
+                });
+            }
+        }
+
+        return result;
+    }
+}
+
+
 // 방 목록 관리하는 전역 저장소
 public static class RoomStore
 {
