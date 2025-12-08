@@ -32,6 +32,10 @@ namespace DotsAndBoxes
         public string status { get; set; }    // "ok"
         public string roomId { get; set; }
         public string inviteCode { get; set; }
+        public string[] players { get; set; }   // ← 이 프로퍼티가 반드시 있어야 joinRes.players가 컴파일됨
+        public int maxPlayers { get; set; }
+        public bool isFull { get; set; }
+        public string currentTurn { get; set; }
     }
 
     // /room/state 응답 DTO
@@ -41,9 +45,33 @@ namespace DotsAndBoxes
         public string inviteCode { get; set; }
         public string[] players { get; set; }
         public bool isFull { get; set; }
+        // ★ 게임 시작 여부 확인용 (게임 전에는 null, 시작되면 현재 턴 playerId)
+        public string currentTurn { get; set; }
     }
 
- 
+    // /game/start 응답 DTO
+    public class GameStartResponse
+    {
+        public string roomId { get; set; }
+        public string inviteCode { get; set; }
+        public string[] players { get; set; }
+        public string[] turnOrder { get; set; }
+        public string firstPlayer { get; set; }
+        public string currentTurn { get; set; }
+    }
+
+    // /room/leave 응답 DTO
+    public class LeaveRoomResponse
+    {
+        public string roomId { get; set; }
+        public string playerId { get; set; }
+        public string[] players { get; set; }
+        public string currentTurn { get; set; }
+        public bool isOwnerChanged { get; set; }
+        public string newOwnerId { get; set; }
+    }
+
+
     /// HTTP 서버와의 통신을 전담하는 정적 클래스
     public static class ServerApi
     {
@@ -51,6 +79,7 @@ namespace DotsAndBoxes
         private static readonly HttpClient httpClient = new HttpClient
         {
             BaseAddress = new Uri("http://43.201.40.98:8080")
+            //BaseAddress = new Uri("http://localhost:5217")
         };
 
 
@@ -235,6 +264,103 @@ namespace DotsAndBoxes
             catch
             {
                 throw new Exception("방 상태 응답 파싱 중 오류가 발생했습니다.");
+            }
+        }
+
+        /// /game/start : 게임 시작
+        public static async Task<GameStartResponse> GameStartAsync(string roomId, string playerId)
+        {
+            var requestObj = new
+            {
+                roomId = roomId,
+                playerId = playerId
+            };
+
+            string json = JsonConvert.SerializeObject(requestObj);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            HttpResponseMessage response;
+            string body;
+
+            try
+            {
+                response = await httpClient.PostAsync("/game/start", content);
+                body = await response.Content.ReadAsStringAsync();
+                Debug.WriteLine("[GAME_START] " + body);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"게임을 시작할 수 없습니다. ({ex.Message})");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                // 400 기준 에러: Room not found, Player not in room, Need at least 2 players, Game already started
+                TryThrowError(body);
+            }
+
+            try
+            {
+                var startRes = JsonConvert.DeserializeObject<GameStartResponse>(body);
+                if (startRes == null || string.IsNullOrEmpty(startRes.roomId))
+                {
+                    throw new Exception("게임 시작 응답이 올바르지 않습니다.");
+                }
+                return startRes;
+            }
+            catch (JsonException)
+            {
+                throw new Exception("게임 시작 응답 파싱 중 오류가 발생했습니다.");
+            }
+        }
+
+        /// /room/leave : 방 나가기
+        public static async Task<LeaveRoomResponse> LeaveRoomAsync(string roomId, string playerId)
+        {
+            var requestObj = new
+            {
+                roomId = roomId,
+                playerId = playerId
+            };
+
+            string json = JsonConvert.SerializeObject(requestObj);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            HttpResponseMessage response;
+            string body;
+
+            try
+            {
+                response = await httpClient.PostAsync("/room/leave", content);
+                body = await response.Content.ReadAsStringAsync();
+
+                //@ 디버그 출력
+                Debug.WriteLine("[ROOM_LEAVE] " + body);
+            }
+            catch (Exception ex)
+            {
+                throw new Exception($"방에서 나갈 수 없습니다. ({ex.Message})");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                // 400, 404 등은 여기서 공통 처리
+                TryThrowError(body);
+            }
+
+            try
+            {
+                var leaveRes = JsonConvert.DeserializeObject<LeaveRoomResponse>(body);
+                if (leaveRes == null || string.IsNullOrEmpty(leaveRes.roomId))
+                {
+                    throw new Exception("방 나가기 응답이 올바르지 않습니다.");
+                }
+
+                return leaveRes;
+            }
+            catch (JsonException)
+            {
+                throw new Exception("방 나가기 응답 파싱 중 오류가 발생했습니다.");
             }
         }
 
