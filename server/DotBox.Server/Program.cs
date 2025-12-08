@@ -355,7 +355,7 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
         room.InviteCode,
         players = room.Players,
         // room.MaxPlayers,
-        // room.CurrentTurn,
+        CurrentTurn = room.CurrentTurn,
         // room.CreatedAt,
         room.IsFull
     });
