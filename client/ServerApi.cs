@@ -2,8 +2,10 @@
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using System.Collections.Generic;
 using Newtonsoft.Json;
 using System.Diagnostics; //debug출력
+using System.Windows.Forms;
 
 namespace DotsAndBoxes
 {
@@ -14,12 +16,14 @@ namespace DotsAndBoxes
         public string playerName { get; set; }
         public string connectedAt { get; set; }
     }
+    
     // PlayerInfo DTO 
     public class PlayerInfo
     {
         public string playerId { get; set; }
         public string playerName { get; set; }
     }
+    
     // /room/create 응답 DTO
     public class CreateRoomResponse
     {
@@ -84,6 +88,58 @@ namespace DotsAndBoxes
         public PlayerInfo[] playerInfos { get; set; }
     }
 
+    // ============================
+    // [멀티추가] 서버 프로토콜 DTO
+    // ============================
+    public class ChoiceRequest
+    {
+        public string roomId { get; set; }
+        public string playerId { get; set; }
+        public bool isHorizontal { get; set; }
+        public int row { get; set; }
+        public int col { get; set; }
+    }
+
+    public class ChoiceMove
+    {
+        public string playerId { get; set; }
+        public bool isHorizontal { get; set; }
+        public int row { get; set; }
+        public int col { get; set; }
+    }
+
+    public class ChoiceResponse
+    {
+        public string status { get; set; }
+        public string roomId { get; set; }
+        public long moveSeq { get; set; }
+        public ChoiceMove move { get; set; }
+        public List<object> madeBoxes { get; set; }
+        public string nextTurnPlayerId { get; set; }
+        public bool boardCompleted { get; set; }
+
+        // 에러용 필드
+        public string errorCode { get; set; }
+        public string currentTurnPlayerId { get; set; }
+    }
+
+    public class DrawEvent
+    {
+        public long seq { get; set; }
+        public string playerId { get; set; }
+        public bool isHorizontal { get; set; }
+        public int row { get; set; }
+        public int col { get; set; }
+        public List<object> madeBoxes { get; set; }
+    }
+
+    public class DrawResponse
+    {
+        public string roomId { get; set; }
+        public List<DrawEvent> events { get; set; }
+        public long lastSeq { get; set; }
+    }
+
 
     /// HTTP 서버와의 통신을 전담하는 정적 클래스
     public static class ServerApi
@@ -94,7 +150,6 @@ namespace DotsAndBoxes
             BaseAddress = new Uri("http://43.201.40.98:8080")
             //BaseAddress = new Uri("http://localhost:5217")
         };
-
 
         /// /connect 호출해서 플레이어 세션 발급
         /// 실패 시 Exception(error 메시지) 던짐
@@ -190,7 +245,6 @@ namespace DotsAndBoxes
                 throw new Exception("방 생성 응답 파싱 중 오류가 발생했습니다.");
             }
         }
-
 
         /// /room/join : 초대코드로 방 참가
         public static async Task<JoinRoomResponse> JoinRoomAsync(string playerId, string inviteCode)
@@ -322,6 +376,37 @@ namespace DotsAndBoxes
             {
                 throw new Exception("게임 시작 응답 파싱 중 오류가 발생했습니다.");
             }
+        }
+
+        // [멀티추가] 선 긋기 요청: POST /choice
+        public static async Task<ChoiceResponse> SendChoiceAsync(ChoiceRequest req)
+        {
+            string json = JsonConvert.SerializeObject(req);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var resp = await httpClient.PostAsync("/choice", content);
+
+            if (!resp.IsSuccessStatusCode)
+                return null;
+
+            var body = await resp.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<ChoiceResponse>(body);
+
+            return result;
+        }
+
+        // [멀티추가] 선 이벤트 조회: GET /draw
+        public static async Task<DrawResponse> GetDrawEventsAsync(string roomId, long afterSeq)
+        {
+            string url = $"/draw?roomId={roomId}&afterSeq={afterSeq}";
+            var resp = await httpClient.GetAsync(url);
+            if (!resp.IsSuccessStatusCode)
+                return null;
+
+            var body = await resp.Content.ReadAsStringAsync();
+            var result = JsonConvert.DeserializeObject<DrawResponse>(body);
+
+            return result;
         }
 
         /// /room/leave : 방 나가기

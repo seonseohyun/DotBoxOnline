@@ -42,20 +42,43 @@ namespace DotsAndBoxes
         {
             _roomId = roomId;
             _myPlayerId = myPlayerId;
+
+            // 재시작 여부 판단 
+            bool isRestart =
+                string.IsNullOrEmpty(inviteCode) ||
+                players == null || players.Length == 0 ||
+                playerInfos == null || playerInfos.Length == 0;
+
+            if (isRestart)
+            {
+                // 재시작이면 서버에서 최신 방 상태 다시 가져오기
+                this.Load += async (s, e) =>
+                {
+                    var state = await ServerApi.GetRoomStateAsync(_roomId);
+
+                    txtInviteCode.Text = state.inviteCode;
+
+                    _currentPlayerIds = state.players != null
+                        ? state.players.ToList()
+                        : new List<string>();
+
+                    var infos = state.playerInfos ?? state.playersInfos;
+
+                    _currentPlayers = BuildDisplayNames(_currentPlayerIds, infos);
+
+                    UpdatePlayers(_currentPlayers);
+
+                    StartLobbyTimer();
+                };
+                return; // 기존 코드 실행 안 함
+            }
+
             txtInviteCode.Text = inviteCode;
             _playerInfos = playerInfos;   // 닉네임 정보 저장
-
-            // 1) playerId 리스트 저장
-            _currentPlayerIds = players != null ? players.ToList() : new List<string>();
-
-            // 2) 닉네임 리스트 생성 (playerInfos 이용)
-            _currentPlayers = BuildDisplayNames(_currentPlayerIds, playerInfos);
-
-            // 3) 라벨 업데이트 (닉네임 기준)
-            UpdatePlayers(_currentPlayers);
-
-            // 4) 로비 상태 주기적으로 체크
-            StartLobbyTimer();
+            _currentPlayerIds = players != null ? players.ToList() : new List<string>(); // playerId 리스트 저장
+            _currentPlayers = BuildDisplayNames(_currentPlayerIds, playerInfos); // 닉네임 리스트 생성
+            UpdatePlayers(_currentPlayers); // 라벨 업데이트 (닉네임 기준)
+            StartLobbyTimer(); // 로비 상태 주기적으로 체크
         }
 
         private void BuildUI()
@@ -229,7 +252,7 @@ namespace DotsAndBoxes
 
                 // 2) 방장 자신의 화면은 바로 게임 화면으로 전환
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new GamePlayForm(5, playersForGame));
+                main.LoadChildForm(new GamePlayForm(5, playersForGame, _currentPlayerIds, _roomId, _myPlayerId));
             }
             catch (Exception ex)
             {
@@ -281,7 +304,7 @@ namespace DotsAndBoxes
 
                     MainForm main = (MainForm)this.ParentForm;
                     // 게임 화면에는 닉네임 리스트 넘김
-                    main.LoadChildForm(new GamePlayForm(5, _currentPlayers));
+                    main.LoadChildForm(new GamePlayForm(5, _currentPlayers, _currentPlayerIds, _roomId, _myPlayerId));
                 }
             }
             catch

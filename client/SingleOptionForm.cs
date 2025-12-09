@@ -91,7 +91,10 @@ namespace DotsAndBoxes
 
         private void BtnBack_Click(object sender, EventArgs e)
         {
-            this.Close(); // 이전 폼으로 돌아가기
+            //this.Close(); // 이전 폼으로 돌아가기
+            MainForm main = (MainForm)this.ParentForm;
+            main.LoadChildForm(new HomeForm()); 
+
         }
     }
 }
