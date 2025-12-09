@@ -11,7 +11,7 @@ namespace DotsAndBoxes
         int N;
         float spacing = 80f;
         float startX = 50f;
-        float startY = 50f;
+        float startY = 100f;
 
         private PointF[,] dots;
         private bool[,] hLines;
@@ -33,6 +33,9 @@ namespace DotsAndBoxes
         // 현재 턴인 플레이어 인덱스 (0, 1, 2)
         private int _currentPlayerIndex;
 
+        // [멀티추가] playerId 리스트 (서버 ID)
+        private List<string> _playerIds = new List<string>(); // playerId (p1, p2, ...)저장용
+
         private bool isInitialized = false;
 
         private enum PlayerType { Player1, Player2, AI }
@@ -43,8 +46,30 @@ namespace DotsAndBoxes
         private bool isAIMode = false;
         private Random rand = new Random();
 
+        // [멀티추가] 모드 구분 & 멀티용 필드
+        private enum GameMode
+        {
+            Single,      // 싱글 (Player vs AI)
+            MultiOnline  // 서버 연동 멀티
+        }
+
+        private GameMode _mode = GameMode.Single;   // 기본은 싱글
+
+        // 멀티용: 방/플레이어 정보
+        private string _roomId;              
+        private string _myPlayerId;            
+
+        // /draw 폴링용
+        private long _lastSeq = 0;                  
+        private System.Windows.Forms.Timer _drawTimer;
+
+        private bool _gameEnded = false;   // 게임끝 결과 처리
+
+        // 싱글모드 생성자
         public GamePlayForm(int boardSize, AIDifficulty difficulty)
         {
+            _mode = GameMode.Single;   // [멀티추가] 싱글 모드
+
             N = boardSize;
             aiDifficulty = difficulty;
             isAIMode = true;
@@ -65,19 +90,27 @@ namespace DotsAndBoxes
             InitializeGame();
         }
 
-        public GamePlayForm(int boardSize, List<string> players)
+        // 멀티모드 생성자
+        public GamePlayForm(int boardSize, List<string> players, List<string> playerIds, string roomId, string myPlayerId)
         {
+            _mode = GameMode.MultiOnline;   // [멀티추가] 멀티 모드
+
             N = boardSize;
             isAIMode = false;
             currentPlayer = PlayerType.Player1;
 
             _players = players ?? new List<string>();
+            _playerIds = playerIds ?? new List<string>();   // [멀티추가]
 
             // 실제 플레이 인원 = 방에 들어온 사람 수 (최대 3명)
             _activePlayerCount = Math.Min(_players.Count, 3);
 
             // 멀티는 0번 플레이어부터 시작
             _currentPlayerIndex = 0;
+
+            // [멀티추가] 방/내 플레이어 ID 저장
+            _roomId = roomId;
+            _myPlayerId = myPlayerId;
 
             NormalizePlayers();   // 내부적으로 3칸에 맞춰줌
             InitializeGame();
@@ -113,8 +146,19 @@ namespace DotsAndBoxes
             {
                 UpdateScores();
                 this.Invalidate();
-                if (isAIMode && currentPlayer == PlayerType.AI)
+
+                // 싱글 모드에서만 AI 루프 시작
+                if (_mode == GameMode.Single &&
+                    isAIMode && currentPlayer == PlayerType.AI)
+                {
                     AIMoveLoop();
+                }
+
+                // [멀티추가] 멀티 모드에서는 /draw 폴링 시작
+                if (_mode == GameMode.MultiOnline)
+                {
+                    StartDrawPolling();
+                }
             };
         }
 
@@ -202,6 +246,14 @@ namespace DotsAndBoxes
             Brush player2BoxBrush = isAIMode ? Brushes.LightCoral : Brushes.LightGreen;
             Brush player3BoxBrush = Brushes.Khaki; // 3번째 플레이어 색
 
+            // ★ 선 색을 플레이어 인덱스별로 매핑 (0,1,2)
+            Pen[] linePens = new Pen[]
+            {
+                Pens.Blue,   // 0번 플레이어
+                Pens.Red,    // 1번 플레이어
+                Pens.Green   // 2번 플레이어
+            };
+
             for (int r = 0; r < N - 1; r++)
             {
                 for (int c = 0; c < N - 1; c++)
@@ -217,8 +269,33 @@ namespace DotsAndBoxes
             {
                 for (int c = 0; c < N; c++)
                 {
-                    if (c < N - 1 && hLines[r, c]) g.DrawLine(hLineOwner[r, c] == 0 ? Pens.Blue : Pens.Red, dots[r, c], dots[r, c + 1]);
-                    if (r < N - 1 && vLines[r, c]) g.DrawLine(vLineOwner[r, c] == 0 ? Pens.Blue : Pens.Red, dots[r, c], dots[r + 1, c]);
+                    //if (c < N - 1 && hLines[r, c]) g.DrawLine(hLineOwner[r, c] == 0 ? Pens.Blue : Pens.Red, dots[r, c], dots[r, c + 1]);
+                    //if (r < N - 1 && vLines[r, c]) g.DrawLine(vLineOwner[r, c] == 0 ? Pens.Blue : Pens.Red, dots[r, c], dots[r + 1, c]);
+                    if (c < N - 1 && hLines[r, c])
+                    {
+                        int owner = hLineOwner[r, c];
+                        Pen p;
+
+                        if (owner == 0) p = Pens.Blue;   // 플레이어1
+                        else if (owner == 1) p = Pens.Red;    // 플레이어2
+                        else if (owner == 2) p = Pens.Green;  // 플레이어3
+                        else p = Pens.Gray;   // 혹시 모를 에러 대비
+
+                        g.DrawLine(p, dots[r, c], dots[r, c + 1]);
+                    }
+
+                    if (r < N - 1 && vLines[r, c])
+                    {
+                        int owner = vLineOwner[r, c];
+                        Pen p;
+
+                        if (owner == 0) p = Pens.Blue;
+                        else if (owner == 1) p = Pens.Red;
+                        else if (owner == 2) p = Pens.Green;
+                        else p = Pens.Gray;
+
+                        g.DrawLine(p, dots[r, c], dots[r + 1, c]);
+                    }
                 }
             }
 
@@ -227,7 +304,17 @@ namespace DotsAndBoxes
                     g.FillEllipse(dotBrush, dots[r, c].X - 4, dots[r, c].Y - 4, 8, 8);
         }
 
+        // [멀티수정] MouseClick - 모드별 분기
         private void GamePlayForm_MouseClick(object sender, MouseEventArgs e)
+        {
+            if (_mode == GameMode.Single)
+                HandleMouseClick_Single(e);
+            else
+                _ = HandleMouseClick_MultiAsync(e); // async 호출
+        }
+
+        // 싱글 모드용 클릭 처리 (기존 로직 이동)
+        private void HandleMouseClick_Single(MouseEventArgs e)
         {
             if (isAIMode && currentPlayer != PlayerType.Player1) return;
 
@@ -236,16 +323,8 @@ namespace DotsAndBoxes
 
             int playerIndex;
 
-            if (isAIMode)
-            {
-                // 싱글: Player1(0), AI(1)
-                playerIndex = (currentPlayer == PlayerType.Player1) ? 0 : 1;
-            }
-            else
-            {
-                // 멀티: 현재 턴 인덱스 (0,1,2 중 하나)
-                playerIndex = _currentPlayerIndex;
-            }
+            // 싱글: Player1(0), AI(1)
+            playerIndex = (currentPlayer == PlayerType.Player1) ? 0 : 1;
 
             bool madeBox = PlaceLine(nearest.Value.isH, nearest.Value.r, nearest.Value.c, playerIndex);
 
@@ -254,22 +333,98 @@ namespace DotsAndBoxes
 
             if (!madeBox)
             {
-                //currentPlayer = isAIMode ? PlayerType.AI : (currentPlayer == PlayerType.Player1 ? PlayerType.Player2 : PlayerType.Player1);
-                
                 // AI 모드: 한 칸 그렸는데 박스 못 만들면 AI 턴으로 넘김
                 currentPlayer = PlayerType.AI;
                 _currentPlayerIndex = 1; // AI 인덱스
-            }
-            else
-            {
-                // 멀티: 다음 플레이어로 (0 → 1 → 2 → 0 …)
-                _currentPlayerIndex = (_currentPlayerIndex + 1) % _activePlayerCount;
             }
 
             // 플레이어가 한 수 둔 뒤 게임 종료 체크
             CheckGameEnd();
 
             if (isAIMode && currentPlayer == PlayerType.AI) AIMoveLoop();
+        }
+
+        // [멀티추가] 멀티 모드용 클릭 처리 (/choice)
+        private async System.Threading.Tasks.Task HandleMouseClick_MultiAsync(MouseEventArgs e)
+        {
+            // 1) 어느 선인지 찾기 (기존 로직 재사용)
+            var nearest = GetNearestLine(e.Location);
+            if (!nearest.HasValue) return;
+
+            bool isH = nearest.Value.isH;
+            int r = nearest.Value.r;
+            int c = nearest.Value.c;
+
+            // 2) ChoiceRequest 구성
+            var req = new ChoiceRequest    // [멀티추가] DTO는 아래에 정의
+            {
+                roomId = _roomId,
+                playerId = _myPlayerId,
+                isHorizontal = isH,
+                row = r,
+                col = c
+            };
+
+            ChoiceResponse res;
+            try
+            {
+                res = await ServerApi.SendChoiceAsync(req); // [멀티추가] ServerApi.cs에 구현
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"서버 통신 오류: {ex.Message}");
+                return;
+            }
+
+            if (res == null)
+            {
+                return;
+            }
+
+
+            if (res.status != "ok")
+            {
+                // 에러 처리 (필요하면 코드별로 메시지)
+                if (res.errorCode == "NOT_YOUR_TURN" && !string.IsNullOrEmpty(res.currentTurnPlayerId))
+                {
+                    MessageBox.Show($"지금은 {res.currentTurnPlayerId} 차례입니다.");
+                }
+                else
+                {
+                    MessageBox.Show($"선 그리기 실패: {res.errorCode}");
+                }
+                return;
+            }
+
+            // 3) 서버가 인정한 move를 로컬 보드에 반영
+            if (res.move != null)
+            {
+                int ownerIndex = GetPlayerIndexById(res.move.playerId);
+                bool madeBox = PlaceLine(res.move.isHorizontal, res.move.row, res.move.col, ownerIndex);
+            }
+
+            // 4) 마지막 시퀀스 업데이트
+            _lastSeq = res.moveSeq;
+
+            // 5) 점수 / 화면 갱신
+            UpdateScores();
+            this.Invalidate();
+
+            // 6) 게임 종료 여부는 일단 로컬 기준으로 체크
+            CheckGameEnd();
+        }
+
+        // [멀티추가] playerId -> 인덱스(0,1,2) 매핑 헬퍼
+        private int GetPlayerIndexById(string playerId)
+        {
+            if (_playerIds == null || _playerIds.Count == 0)
+                return 0;
+
+            int idx = _playerIds.IndexOf(playerId);   // ★ 여기만 바뀜 (닉네임X, playerIdO)
+
+            if (idx < 0) idx = 0;
+            if (idx >= _activePlayerCount) idx = _activePlayerCount - 1;
+            return idx;
         }
 
         private (bool isH, int r, int c)? GetNearestLine(Point location)
@@ -494,7 +649,9 @@ namespace DotsAndBoxes
                 N,              // 보드 크기
                 isAIMode,       // AI 모드인지
                 _players,       // 플레이어 이름 리스트
-                aiDifficulty    // AI 난이도 (멀티면 무시)
+                aiDifficulty,    // AI 난이도 (멀티면 무시)
+                _roomId,
+                _myPlayerId
             );
 
             // 4) 승자 판정 (2명/3명 모두 공용)
@@ -534,10 +691,71 @@ namespace DotsAndBoxes
         // 남은 수가 없는지 확인하고, 없으면 결과창 띄움
         private void CheckGameEnd()
         {
+            // 이미 한 번 처리했으면 다시 하지 않음
+            if (_gameEnded) return;
             if (GetAvailableMoves().Count == 0)
             {
-                ShowGameResult();
+                _gameEnded = true;
+
+                // 1.5초(1500ms) 후에 결과창 보여주기
+                var delayTimer = new System.Windows.Forms.Timer();
+                delayTimer.Interval = 1500; // 원하는 만큼 조절 (1000 = 1초, 2000 = 2초)
+
+                delayTimer.Tick += (s, e) =>
+                {
+                    delayTimer.Stop();
+                    delayTimer.Dispose();
+
+                    ShowGameResult();   // 여기서 그때 결과창으로 전환
+                };
+
+                delayTimer.Start();
             }
+        }
+
+        // [멀티추가] /draw 폴링용 타이머
+        private void StartDrawPolling()
+        {
+            _drawTimer = new System.Windows.Forms.Timer();
+            _drawTimer.Interval = 500; // 0.5초 간격
+            _drawTimer.Tick += async (s, e) =>
+            {
+                await PollDrawEventsAsync();
+            };
+            _drawTimer.Start();
+        }
+
+        // [멀티추가] /draw 호출해서 새로운 이벤트만 반영
+        private async System.Threading.Tasks.Task PollDrawEventsAsync()
+        {
+            if (string.IsNullOrEmpty(_roomId)) return;
+
+            DrawResponse res;
+            try
+            {
+                res = await ServerApi.GetDrawEventsAsync(_roomId, _lastSeq);
+            }
+            catch
+            {
+                // 조용히 무시 (네트워크 흔들릴 수 있으니)
+                return;
+            }
+
+            if (res == null || res.events == null || res.events.Count == 0)
+                return;
+
+            foreach (var ev in res.events)
+            {
+                int ownerIndex = GetPlayerIndexById(ev.playerId);
+                bool madeBox = PlaceLine(ev.isHorizontal, ev.row, ev.col, ownerIndex);
+                _lastSeq = ev.seq;
+            }
+
+            UpdateScores();
+            this.Invalidate();
+
+            // 상대가 그린 마지막 선까지 반영된 뒤, 게임 종료 여부 체크
+            CheckGameEnd();
         }
     }
 }

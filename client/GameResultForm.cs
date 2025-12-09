@@ -22,6 +22,8 @@ namespace DotsAndBoxes
         private bool _isAIMode;
         private List<string> _players;
         private GamePlayForm.AIDifficulty _aiDifficulty;
+        private string _roomId;
+        private string _myPlayerId;
 
         // 외부에서 읽을 용도
         public GameResultAction Action { get; private set; } = GameResultAction.None;
@@ -48,6 +50,20 @@ namespace DotsAndBoxes
 
             InitializeComponent();
             BuildUI();
+        }
+
+        // 멀티용 생성자
+        public GameResultForm(
+            int boardSize,
+            bool isAIMode,
+            List<string> players,
+            GamePlayForm.AIDifficulty aiDifficulty,
+            string roomId,
+            string myPlayerId)
+            : this(boardSize, isAIMode, players, aiDifficulty)
+        {
+            _roomId = roomId;
+            _myPlayerId = myPlayerId;
         }
 
         private void BuildUI()
@@ -102,8 +118,7 @@ namespace DotsAndBoxes
             }
             else
             {
-                // 멀티 모드는 플레이어 리스트 그대로 넘겨서 다시 시작
-                main.LoadChildForm(new GamePlayForm(_boardSize, _players));
+                main.LoadChildForm(new MultiLobbyForm(_roomId, _myPlayerId, null, null, null));
             }
 
         }
@@ -113,7 +128,7 @@ namespace DotsAndBoxes
             Action = GameResultAction.GoMain;
 
             MainForm main = (MainForm)this.ParentForm;
-            main.LoadChildForm(new SingleOptionForm()); // 또는 Main 화면으로
+            main.LoadChildForm(new HomeForm()); // 또는 Main 화면으로
         }
 
         // 결과 텍스트 바꾸는 용도
