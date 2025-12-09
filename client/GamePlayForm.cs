@@ -22,6 +22,16 @@ namespace DotsAndBoxes
 
         private Label lblPlayer1Score;
         private Label lblPlayer2Score;
+        private Label lblPlayer3Score;
+
+        // 접속 플레이어 (최대 3명)
+        private List<string> _players = new List<string>();
+
+        // 실제 게임에 참여하는 인원 수
+        private int _activePlayerCount;
+
+        // 현재 턴인 플레이어 인덱스 (0, 1, 2)
+        private int _currentPlayerIndex;
 
         private bool isInitialized = false;
 
@@ -39,14 +49,37 @@ namespace DotsAndBoxes
             aiDifficulty = difficulty;
             isAIMode = true;
             currentPlayer = PlayerType.AI;
+
+            // 싱글 모드는 항상 2인 (Player + AI)
+            _activePlayerCount = 2;
+            _currentPlayerIndex = 1; // 0: Player, 1: AI (시작 턴을 AI로)
+
+            // 상단 이름 설정 (AI 모드)
+            _players = new List<string>
+            {
+                "Player", 
+                "AI"      
+            };
+
+            NormalizePlayers();   // 항상 3칸 맞추는 함수
             InitializeGame();
         }
 
-        public GamePlayForm(int boardSize)
+        public GamePlayForm(int boardSize, List<string> players)
         {
             N = boardSize;
             isAIMode = false;
             currentPlayer = PlayerType.Player1;
+
+            _players = players ?? new List<string>();
+
+            // 실제 플레이 인원 = 방에 들어온 사람 수 (최대 3명)
+            _activePlayerCount = Math.Min(_players.Count, 3);
+
+            // 멀티는 0번 플레이어부터 시작
+            _currentPlayerIndex = 0;
+
+            NormalizePlayers();   // 내부적으로 3칸에 맞춰줌
             InitializeGame();
         }
 
@@ -85,6 +118,20 @@ namespace DotsAndBoxes
             };
         }
 
+        // 상단 접속자 3칸 맞춰주는 메서드
+        private void NormalizePlayers()
+        {
+            // 최대 3명까지만 사용
+            if (_players.Count > 3)
+            {
+                _players = _players.GetRange(0, 3);
+            }
+            while (_players.Count < 3)
+            {
+                _players.Add("대기중");
+            }
+        }
+
         private void BuildUI()
         {
             this.Text = "Dots & Boxes";
@@ -94,23 +141,39 @@ namespace DotsAndBoxes
             TableLayoutPanel tlp = new TableLayoutPanel
             {
                 RowCount = 1,
-                ColumnCount = 2,
+                ColumnCount = 3,
                 Dock = DockStyle.Top,
-                Height = 50,
+                Height = 60,
             };
-            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
+
+            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
+
+            // 접속자 이름 준비 (최대 3명)
+            string name1 = _players[0];
+            string name2 = _players[1];
+            string name3 = _players[2];
 
             lblPlayer1Score = new Label
             {
-                Text = "Player1: 0",
+                Text = $"{name1}: 0",
                 TextAlign = ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill,
                 Font = new Font("Arial", 12, FontStyle.Bold)
             };
+
             lblPlayer2Score = new Label
             {
-                Text = isAIMode ? "AI: 0" : "Player2: 0",
+                Text = $"{name2}: 0",
+                TextAlign = ContentAlignment.MiddleCenter,
+                Dock = DockStyle.Fill,
+                Font = new Font("Arial", 12, FontStyle.Bold)
+            };
+
+            lblPlayer3Score = new Label
+            {
+                Text = $"{name3}: 0",
                 TextAlign = ContentAlignment.MiddleCenter,
                 Dock = DockStyle.Fill,
                 Font = new Font("Arial", 12, FontStyle.Bold)
@@ -118,6 +181,7 @@ namespace DotsAndBoxes
 
             tlp.Controls.Add(lblPlayer1Score, 0, 0);
             tlp.Controls.Add(lblPlayer2Score, 1, 0);
+            tlp.Controls.Add(lblPlayer3Score, 2, 0);
 
             this.Controls.Add(tlp);
         }
@@ -136,6 +200,7 @@ namespace DotsAndBoxes
             Brush dotBrush = Brushes.Black;
             Brush player1BoxBrush = Brushes.LightBlue;
             Brush player2BoxBrush = isAIMode ? Brushes.LightCoral : Brushes.LightGreen;
+            Brush player3BoxBrush = Brushes.Khaki; // 3번째 플레이어 색
 
             for (int r = 0; r < N - 1; r++)
             {
@@ -143,6 +208,8 @@ namespace DotsAndBoxes
                 {
                     if (boxes[r, c] == 0) g.FillRectangle(player1BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
                     else if (boxes[r, c] == 1) g.FillRectangle(player2BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
+                    else if (boxes[r, c] == 2)
+                        g.FillRectangle(player3BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
                 }
             }
 
@@ -167,7 +234,19 @@ namespace DotsAndBoxes
             var nearest = GetNearestLine(e.Location);
             if (!nearest.HasValue) return;
 
-            int playerIndex = currentPlayer == PlayerType.Player1 ? 0 : 1;
+            int playerIndex;
+
+            if (isAIMode)
+            {
+                // 싱글: Player1(0), AI(1)
+                playerIndex = (currentPlayer == PlayerType.Player1) ? 0 : 1;
+            }
+            else
+            {
+                // 멀티: 현재 턴 인덱스 (0,1,2 중 하나)
+                playerIndex = _currentPlayerIndex;
+            }
+
             bool madeBox = PlaceLine(nearest.Value.isH, nearest.Value.r, nearest.Value.c, playerIndex);
 
             UpdateScores();
@@ -175,8 +254,20 @@ namespace DotsAndBoxes
 
             if (!madeBox)
             {
-                currentPlayer = isAIMode ? PlayerType.AI : (currentPlayer == PlayerType.Player1 ? PlayerType.Player2 : PlayerType.Player1);
+                //currentPlayer = isAIMode ? PlayerType.AI : (currentPlayer == PlayerType.Player1 ? PlayerType.Player2 : PlayerType.Player1);
+                
+                // AI 모드: 한 칸 그렸는데 박스 못 만들면 AI 턴으로 넘김
+                currentPlayer = PlayerType.AI;
+                _currentPlayerIndex = 1; // AI 인덱스
             }
+            else
+            {
+                // 멀티: 다음 플레이어로 (0 → 1 → 2 → 0 …)
+                _currentPlayerIndex = (_currentPlayerIndex + 1) % _activePlayerCount;
+            }
+
+            // 플레이어가 한 수 둔 뒤 게임 종료 체크
+            CheckGameEnd();
 
             if (isAIMode && currentPlayer == PlayerType.AI) AIMoveLoop();
         }
@@ -324,6 +415,7 @@ namespace DotsAndBoxes
             bool madeBox = PlaceLine(move.isH, move.r, move.c, 1);
             if (!madeBox)
                 currentPlayer = PlayerType.Player1;
+                _currentPlayerIndex = 0; // 다음 턴: 사람(0번)
         }
 
         private void AIMoveLoop()
@@ -335,20 +427,117 @@ namespace DotsAndBoxes
                 this.Invalidate();
                 Application.DoEvents();
                 Thread.Sleep(200);
+
+                // AI가 둔 뒤에도 게임 종료 체크
+                CheckGameEnd();
             }
+        }
+
+        // 현재 보드 상태 기준으로 플레이어별 점수 계산
+        private int[] CalculateScores()
+        {
+            int[] scores = new int[_activePlayerCount];
+
+            for (int r = 0; r < N - 1; r++)
+            {
+                for (int c = 0; c < N - 1; c++)
+                {
+                    int owner = boxes[r, c];
+                    if (owner >= 0 && owner < _activePlayerCount)
+                    {
+                        scores[owner]++;
+                    }
+                }
+            }
+
+            return scores;
         }
 
         private void UpdateScores()
         {
-            int score1 = 0, score2 = 0;
-            for (int r = 0; r < N - 1; r++)
-                for (int c = 0; c < N - 1; c++)
+            //int score1 = 0, score2 = 0;
+            //for (int r = 0; r < N - 1; r++)
+            //    for (int c = 0; c < N - 1; c++)
+            //    {
+            //        if (boxes[r, c] == 0) score1++;
+            //        else if (boxes[r, c] == 1) score2++;
+            //    }
+            //lblPlayer1Score.Text = $"Player1: {score1}";
+            //lblPlayer2Score.Text = isAIMode ? $"AI: {score2}" : $"Player2: {score2}";
+            
+            int[] scores = CalculateScores();
+
+            string name1 = _players[0];
+            string name2 = _players[1];
+            string name3 = _players[2];
+
+            // 0번 플레이어 점수
+            int s1 = (_activePlayerCount > 0) ? scores[0] : 0;
+            int s2 = (_activePlayerCount > 1) ? scores[1] : 0;
+            int s3 = (_activePlayerCount > 2) ? scores[2] : 0;
+
+            lblPlayer1Score.Text = $"{name1}: {s1}";
+            lblPlayer2Score.Text = $"{name2}: {s2}";
+            lblPlayer3Score.Text = $"{name3}: {s3}";
+        }
+
+        // 모든 수가 끝나면 결과창 띄우는 메서드
+        private void ShowGameResult()
+        {
+            int[] scores = CalculateScores();
+
+            // 2) 메인폼 찾기
+            MainForm main = (MainForm)this.ParentForm;
+
+            // 3) GameResultForm 생성
+            var resultForm = new GameResultForm(
+                N,              // 보드 크기
+                isAIMode,       // AI 모드인지
+                _players,       // 플레이어 이름 리스트
+                aiDifficulty    // AI 난이도 (멀티면 무시)
+            );
+
+            // 4) 승자 판정 (2명/3명 모두 공용)
+            int winnerIndex = -1;
+            int bestScore = -1;
+            bool isTie = false;
+
+            for (int i = 0; i < _activePlayerCount; i++)
+            {
+                if (scores[i] > bestScore)
                 {
-                    if (boxes[r, c] == 0) score1++;
-                    else if (boxes[r, c] == 1) score2++;
+                    bestScore = scores[i];
+                    winnerIndex = i;
+                    isTie = false;
                 }
-            lblPlayer1Score.Text = $"Player1: {score1}";
-            lblPlayer2Score.Text = isAIMode ? $"AI: {score2}" : $"Player2: {score2}";
+                else if (scores[i] == bestScore)
+                {
+                    // 최고 점수와 동점이면 비김 처리
+                    isTie = true;
+                }
+            }
+
+            if (winnerIndex == -1 || isTie)
+            {
+                resultForm.SetResultText("Draw");
+            }
+            else
+            {
+                string winnerName = _players[winnerIndex];
+                resultForm.SetResultText($"{winnerName} Win!");
+            }
+
+            // 5) 메인폼에 결과창 로드
+            main.LoadChildForm(resultForm);
+        }
+
+        // 남은 수가 없는지 확인하고, 없으면 결과창 띄움
+        private void CheckGameEnd()
+        {
+            if (GetAvailableMoves().Count == 0)
+            {
+                ShowGameResult();
+            }
         }
     }
 }

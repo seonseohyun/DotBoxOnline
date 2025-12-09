@@ -20,7 +20,10 @@ namespace DotsAndBoxes
         private Button btnExit;
         private string _roomId;      // 방 ID
         private string _myPlayerId;  // 내 playerId
-        private System.Windows.Forms.Timer _lobbyTimer; // 방장이외 유저들 게임화면 넘어가게하기 위함
+        private System.Windows.Forms.Timer _lobbyTimer;
+        private PlayerInfo[] _playerInfos;   // 닉네임 매핑용
+        private List<string> _currentPlayers = new List<string>(); // 게임 화면 상단에 띄울 "닉네임" 리스트
+        private List<string> _currentPlayerIds = new List<string>(); // 서버 playerId 리스트 (호스트 판별용)
 
 
         public MultiLobbyForm()
@@ -29,17 +32,29 @@ namespace DotsAndBoxes
             BuildUI();
         }
 
-        // 방 정보 + 내 playerId + 초대코드 + players 리스트 받는 생성자
-        public MultiLobbyForm(string roomId, string myPlayerId, string inviteCode, List<string> players) : this()
+        // 방 정보 + 내 playerId + 초대코드 + players + playerInfos 받는 생성자
+        public MultiLobbyForm(
+            string roomId,
+            string myPlayerId,
+            string inviteCode,
+            string[] players,
+            PlayerInfo[] playerInfos) : this()
         {
             _roomId = roomId;
             _myPlayerId = myPlayerId;
             txtInviteCode.Text = inviteCode;
+            _playerInfos = playerInfos;   // 닉네임 정보 저장
 
-            // 서버에서 받은 players 리스트
-            UpdatePlayers(players);
+            // 1) playerId 리스트 저장
+            _currentPlayerIds = players != null ? players.ToList() : new List<string>();
 
-            // 로비 상태 주기적으로 체크(일반유저 게임시작으로 넘어가기)
+            // 2) 닉네임 리스트 생성 (playerInfos 이용)
+            _currentPlayers = BuildDisplayNames(_currentPlayerIds, playerInfos);
+
+            // 3) 라벨 업데이트 (닉네임 기준)
+            UpdatePlayers(_currentPlayers);
+
+            // 4) 로비 상태 주기적으로 체크
             StartLobbyTimer();
         }
 
@@ -138,6 +153,20 @@ namespace DotsAndBoxes
             _lobbyTimer.Start();
         }
 
+        // 닉네임 리스트 만드는 
+        private List<string> BuildDisplayNames(List<string> playerIds, PlayerInfo[] infos)
+        {
+            var result = new List<string>();
+
+            foreach (var id in playerIds)
+            {
+                var info = infos?.FirstOrDefault(p => p.playerId == id);
+                result.Add(info != null ? info.playerName : id);
+            }
+
+            return result;
+        }
+
         // 플레이어 리스트
         public void UpdatePlayers(List<string> players)
         {
@@ -147,13 +176,13 @@ namespace DotsAndBoxes
             lblPlayer3.Text = players.Count > 2 ? players[2] : "Waiting for Player3...";
 
             // 2) 방장 여부 판단 (players[0] = Host)
-            bool iAmHost = (players.Count > 0 && players[0] == _myPlayerId);
+            bool iAmHost = (_currentPlayerIds.Count > 0 && _currentPlayerIds[0] == _myPlayerId);
 
             // 3) 방장일 때만 Start 버튼 활성화
-            btnStart.Enabled = iAmHost;
+            btnStart.Enabled = (iAmHost && players.Count >= 2);
 
             // 4) 방장 표시 (Player1 라벨 배경색만 변경)
-            if (players.Count > 0)
+            if (_currentPlayerIds.Count > 0)
             {
                 lblPlayer1.BackColor = Color.LightYellow;
                 lblPlayer1.Font = new Font(lblPlayer1.Font, FontStyle.Bold);
@@ -176,9 +205,31 @@ namespace DotsAndBoxes
                 // 1) 서버에 게임 시작 요청
                 var startRes = await ServerApi.GameStartAsync(_roomId, _myPlayerId);
 
+                // 1-1) 플레이어 목록 준비
+                List<string> playersForGame;
+
+                if (_currentPlayers != null && _currentPlayers.Count > 0)
+                {
+                    // 방 상태에서 이미 받아둔 "닉네임" 목록이 있으면 그걸 사용
+                    playersForGame = new List<string>(_currentPlayers);
+                }
+                else
+                {
+                    // 혹시 몰라서 다시 한 번 상태 조회
+                    var state = await ServerApi.GetRoomStateAsync(_roomId);
+
+                    var playersIdList = state.players != null
+                        ? state.players.ToList()
+                        : new List<string>();
+
+                    var infos = state.playerInfos ?? state.playersInfos;
+
+                    playersForGame = BuildDisplayNames(playersIdList, infos);
+                }
+
                 // 2) 방장 자신의 화면은 바로 게임 화면으로 전환
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new GamePlayForm(5));
+                main.LoadChildForm(new GamePlayForm(5, playersForGame));
             }
             catch (Exception ex)
             {
@@ -200,25 +251,37 @@ namespace DotsAndBoxes
             {
                 var state = await ServerApi.GetRoomStateAsync(_roomId);
 
-                var playersList = state.players != null
+                // 1) playerId 리스트
+                var playersIdList = state.players != null
                     ? state.players.ToList()
                     : new List<string>();
 
-                // 플레이어 라벨/방장 표시, Start 버튼 Enable/Disable
-                UpdatePlayers(playersList);
+                // 저장
+                _currentPlayerIds = playersIdList;
 
-                // 내가 방장이면 여기서 끝 (타이머는 상태 표시만)
-                bool iAmHost = (playersList.Count > 0 && playersList[0] == _myPlayerId);
+                // 2) playerInfos 또는 playersInfos 중 살아있는 쪽 사용
+                var infos = state.playerInfos ?? state.playersInfos;
+
+
+                // 닉네임 리스트로 변환
+                _currentPlayers = BuildDisplayNames(_currentPlayerIds, infos);
+                
+                // 3) 라벨 갱신 (닉네임)
+                UpdatePlayers(_currentPlayers);
+
+                // 4) 내가 방장이면 여기서 끝
+                bool iAmHost = (_currentPlayerIds.Count > 0 && _currentPlayerIds[0] == _myPlayerId);
                 if (iAmHost)
                     return;
 
-                // 방장이 아닌 사람만 "게임 시작" 감지
+                // 5) 방장이 아니면 게임 시작 감지
                 if (!string.IsNullOrEmpty(state.currentTurn))
                 {
                     _lobbyTimer.Stop();
 
                     MainForm main = (MainForm)this.ParentForm;
-                    main.LoadChildForm(new GamePlayForm(5));
+                    // 게임 화면에는 닉네임 리스트 넘김
+                    main.LoadChildForm(new GamePlayForm(5, _currentPlayers));
                 }
             }
             catch
@@ -237,6 +300,17 @@ namespace DotsAndBoxes
             {
                 // 서버에 방 나가기 요청
                 var leaveRes = await ServerApi.LeaveRoomAsync(_roomId, _myPlayerId);
+                
+                // 로컬 상태 초기화 (이전 기록 리셋) 
+                _roomId = null;               
+                _myPlayerId = null;
+
+                if (_currentPlayers != null)   // 닉네임 리스트 비우기
+                    _currentPlayers.Clear();
+
+                if (_currentPlayerIds != null) // playerId 리스트 비우기
+                    _currentPlayerIds.Clear();
+
 
                 //  타이머 정리
                 if (_lobbyTimer != null)

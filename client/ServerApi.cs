@@ -14,7 +14,12 @@ namespace DotsAndBoxes
         public string playerName { get; set; }
         public string connectedAt { get; set; }
     }
-
+    // PlayerInfo DTO 
+    public class PlayerInfo
+    {
+        public string playerId { get; set; }
+        public string playerName { get; set; }
+    }
     // /room/create 응답 DTO
     public class CreateRoomResponse
     {
@@ -24,6 +29,7 @@ namespace DotsAndBoxes
         public int maxPlayers { get; set; }
         public bool isFull { get; set; }
         public string currentTurn { get; set; }
+        public PlayerInfo[] playerInfos { get; set; } // 플레이어의 ID + 닉네임 정보
     }
 
     // /room/join 응답 DTO
@@ -36,6 +42,7 @@ namespace DotsAndBoxes
         public int maxPlayers { get; set; }
         public bool isFull { get; set; }
         public string currentTurn { get; set; }
+        public PlayerInfo[] playerInfos { get; set; }
     }
 
     // /room/state 응답 DTO
@@ -47,6 +54,10 @@ namespace DotsAndBoxes
         public bool isFull { get; set; }
         // ★ 게임 시작 여부 확인용 (게임 전에는 null, 시작되면 현재 턴 playerId)
         public string currentTurn { get; set; }
+
+        public PlayerInfo[] playerInfos { get; set; }
+        // /room/state에서 내려오는 playersInfos용
+        public PlayerInfo[] playersInfos { get; set; }
     }
 
     // /game/start 응답 DTO
@@ -58,6 +69,7 @@ namespace DotsAndBoxes
         public string[] turnOrder { get; set; }
         public string firstPlayer { get; set; }
         public string currentTurn { get; set; }
+        public PlayerInfo[] playerInfos { get; set; }
     }
 
     // /room/leave 응답 DTO
@@ -69,6 +81,7 @@ namespace DotsAndBoxes
         public string currentTurn { get; set; }
         public bool isOwnerChanged { get; set; }
         public string newOwnerId { get; set; }
+        public PlayerInfo[] playerInfos { get; set; }
     }
 
 
@@ -85,11 +98,11 @@ namespace DotsAndBoxes
 
         /// /connect 호출해서 플레이어 세션 발급
         /// 실패 시 Exception(error 메시지) 던짐
-        public static async Task<ConnectResponse> ConnectAsync(string playerName)
+        public static async Task<ConnectResponse> ConnectAsync(string nickname)
         {
             var requestObj = new
             {
-                playerName = playerName
+                playerName = nickname
             };
 
             string json = JsonConvert.SerializeObject(requestObj);
@@ -100,21 +113,18 @@ namespace DotsAndBoxes
 
             try
             {
+                // ★ static httpClient + 상대 경로 사용
                 response = await httpClient.PostAsync("/connect", content);
                 body = await response.Content.ReadAsStringAsync();
-
-                //@디버그 출력
-                Debug.WriteLine("[CONNECT] " + body);
             }
             catch (Exception ex)
             {
-                // 네트워크 자체 오류 (서버 다운, 타임아웃 등)
-                throw new Exception($"서버에 접속할 수 없습니다. ({ex.Message})");
+                throw new Exception($"서버에 연결할 수 없습니다. ({ex.Message})");
             }
 
             if (!response.IsSuccessStatusCode)
             {
-                TryThrowError(body);
+                TryThrowError(body); // 이미 만들어둔 에러 파싱 함수 있지?
             }
 
             try
@@ -122,14 +132,14 @@ namespace DotsAndBoxes
                 var connectRes = JsonConvert.DeserializeObject<ConnectResponse>(body);
                 if (connectRes == null || string.IsNullOrEmpty(connectRes.playerId))
                 {
-                    throw new Exception("서버 응답이 올바르지 않습니다.");
+                    throw new Exception("Connect 응답이 올바르지 않습니다.");
                 }
 
                 return connectRes;
             }
             catch (JsonException)
             {
-                throw new Exception("서버 응답 파싱 중 오류가 발생했습니다.");
+                throw new Exception("Connect 응답 파싱 중 오류가 발생했습니다.");
             }
         }
 
