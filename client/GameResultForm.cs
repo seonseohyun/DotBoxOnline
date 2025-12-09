@@ -17,6 +17,12 @@ namespace DotsAndBoxes
         private Button btnGoMain;
         private Panel pnlButtonArea;
 
+        // 재시작에 필요한 정보 저장용
+        private int _boardSize;
+        private bool _isAIMode;
+        private List<string> _players;
+        private GamePlayForm.AIDifficulty _aiDifficulty;
+
         // 외부에서 읽을 용도
         public GameResultAction Action { get; private set; } = GameResultAction.None;
 
@@ -28,8 +34,18 @@ namespace DotsAndBoxes
             GoMain
         }
 
-        public GameResultForm()
+        //  게임 설정을 받는 생성자
+        public GameResultForm(
+            int boardSize,
+            bool isAIMode,
+            List<string> players,
+            GamePlayForm.AIDifficulty aiDifficulty)
         {
+            _boardSize = boardSize;
+            _isAIMode = isAIMode;
+            _aiDifficulty = aiDifficulty;
+            _players = players ?? new List<string>();
+
             InitializeComponent();
             BuildUI();
         }
@@ -76,12 +92,26 @@ namespace DotsAndBoxes
 
         private void BtnRestart_Click(object sender, EventArgs e)
         {
+            Action = GameResultAction.Restart;
             MainForm main = (MainForm)this.ParentForm;
-            main.LoadChildForm(new GamePlayForm(5)); // 멀티 모드 보드 크기 5
+
+            if (_isAIMode)
+            {
+                // 싱글(AI) 모드는 AI 난이도 포함해서 다시 시작
+                main.LoadChildForm(new GamePlayForm(_boardSize, _aiDifficulty));
+            }
+            else
+            {
+                // 멀티 모드는 플레이어 리스트 그대로 넘겨서 다시 시작
+                main.LoadChildForm(new GamePlayForm(_boardSize, _players));
+            }
+
         }
 
         private void BtnMain_Click(object sender, EventArgs e)
         {
+            Action = GameResultAction.GoMain;
+
             MainForm main = (MainForm)this.ParentForm;
             main.LoadChildForm(new SingleOptionForm()); // 또는 Main 화면으로
         }
