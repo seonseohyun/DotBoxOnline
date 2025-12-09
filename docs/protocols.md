@@ -2,7 +2,7 @@
 
 | 구분 | 내용 |
 | :--- | :--- |
-| **최종 수정일** | 2025년 12월 08일 |
+| **최종 수정일** | 2025년 12월 09일 |
 | **작성자** | 선서현 |
 | **URL** | `http://43.201.40.98:8080` |
 
@@ -225,7 +225,7 @@ curl http://43.201.40.98:8080/players
   ```
 ---
 
-## 5. 방 참가 (POST /room/join)
+## 5-1. 방 참가 (POST /room/join)
 초대 코드를 이용해서 이미 만들어진 방에 들어감  
 플레이어는 먼저 /connect로 playerId를 발급받아야 하고, 그 다음 이 API로 특정 방에 참가한다.  
 동일한 playerId가 같은 inviteCode로 /room/join를 여러 번 호출해도  
@@ -294,7 +294,7 @@ curl http://43.201.40.98:8080/players
   ```
 ---
 
-## 5-1. 방 나가기 (POST /room/leave)
+## 5-2. 방 나가기 (POST /room/leave)
 
 플레이어가 현재 들어가 있는 방에서 나갈 때 사용하는 API.  
 나간 사람이 방장이면, 남아 있는 사람 중 첫 번째 플레이어가 새 방장이 되며 아무도 남지 않으면 방은 삭제된다.
@@ -484,12 +484,12 @@ curl http://43.201.40.98:8080/players
   }
   ```
     
-  | 필드명         | 타입       | 설명                                     |
+  | 필드명         | 타입     | 설명                                     |
   | ----------- | -------- | -------------------------------------- |
   | roomId      | string   | 방 ID                                   |
-  | inviteCode  | string   | 방 초대 코드                                |
+  | inviteCode  | string   | 방 초대 코드                              |
   | players     | string[] | 방에 속한 플레이어 ID 목록                       |
-  | turnOrder   | string[] | 이번 게임의 턴 순서                            |
+  | turnOrder   | string[] | 이번 게임의 턴 순서                         |
   | firstPlayer | string   | 첫 턴을 진행할 플레이어 ID                       |
   | currentTurn | string   | 현재 턴인 플레이어 ID (게임 시작 직후 = firstPlayer) |
 
@@ -507,4 +507,144 @@ curl http://43.201.40.98:8080/players
   // 4) 이미 게임이 시작 된 경우
   { "error": "Game already started" }
   ```
-  
+---
+## 8-1. 선 긋기 (POST /choice)
+
+멀티플레이시 차례에 해당하는 유저가 선택한 선 정보를 전달한다.  
+| 속성                 | 내용                 |
+| ------------------ | ------------------ |
+| **Method**         | `POST`             |
+| **Path**           | `/choice`          |
+| **Content-Type**   | `application/json` |
+| **Request Body**   | `ChoiceRequest`    |
+| **성공 HTTP Status** | `200 OK`           |
+| **실패 HTTP Status** | `400 Bad Request`  |
+
+### Request Body: 
+```json
+{
+  "roomId": "string",
+  "playerId": "string",
+  "isHorizontal": true,
+  "row": 1,
+  "col": 2
+}
+```
+| 필드명          | 타입     | 필수 | 설명                      |
+| ------------ | ------ | -- | ----------------------- |
+| roomId       | string | O  | 방 ID                    |
+| playerId     | string | O  | 선을 긋는 플레이어 ID           |
+| isHorizontal | bool   | O  | true = 가로선, false = 세로선 |
+| row          | int    | O  | 선의 시작 row 좌표            |
+| col          | int    | O  | 선의 시작 col 좌표            |
+
+### Response:
+* 성공 (200 OK)
+  ```json
+  {
+    "status": "ok",
+    "roomId": "abc123",
+    "moveSeq": 12,
+    "move": {
+      "playerId": "p1",
+      "isHorizontal": true,
+      "row": 1,
+      "col": 3
+    },
+    "madeBoxes": [],
+    "nextTurnPlayerId": "p2",
+    "boardCompleted": false
+  }
+  ```
+  | 필드명              | 타입     | 설명                           |
+  | ---------------- | ------ | ----------------------------    |
+  | status           | string | `"ok"`                          |
+  | roomId           | string | 방 ID                            |
+  | moveSeq          | long   | 이번 선 이벤트의 고유 시퀀스 번호        |
+  | move             | object | 이번에 그린 선 정보                  |
+  | madeBoxes        | array  | 새로 만들어진 박스 정보(현재는 항상 빈 배열)   |
+  | nextTurnPlayerId | string | 다음 턴 플레이어 ID                 |
+  | boardCompleted   | bool   | 게임판이 완성되었는지 여부 (현재 항상 false) |
+
+* 실패 (400 Bad Request)
+  ```json
+  // 1) 방을 찾을 수 없는 경우
+  { "error": "Room not found" }
+
+  // 2) 요청한 플레이어가 방에 없음
+  { "error": "Player not in room" }
+
+  // 3) 게임 시작 전인 경우
+  { "status": "error", "errorCode": "Game not started" }
+
+  // 4) 내 턴이 아닌 경우
+  {
+    "status": "error",
+    "errorCode": "Not your turn",
+    "currentTurnPlayerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3"
+  }
+  ```
+---
+## 8-2. 선 이벤트 조회 (GET /draw)
+상대가 그린 선 이벤트를 조회하여 정보를 전달합니다.
+| 속성                 | 내용                   |
+| ------------------ | -------------------- |
+| **Method**         | `GET`                |
+| **Path**           | `/draw`              |
+| **Query Params**   | `roomId`, `afterSeq` |
+| **성공 HTTP Status** | `200 OK`             |
+| **실패 HTTP Status** | `400 Bad Request`    |
+
+### Request Body: 
+```http
+GET /draw?roomId=abc123&afterSeq=10
+```
+| 파라미터     | 타입     | 필수 | 설명                          |
+| -------- | ------ | -- | --------------------------- |
+| roomId   | string | O  | 방 ID                        |
+| afterSeq | long   | X  | 해당 시퀀스보다 큰 이벤트만 조회 (기본값: 0) |
+
+### Response:
+* 성공 (200 OK)
+  ```json
+  {
+    "roomId": "abc123",
+    "events": [
+      {
+        "seq": 11,
+        "playerId": "p2",
+        "isHorizontal": false,
+        "row": 4,
+        "col": 1,
+        "madeBoxes": []
+      },
+      {
+        "seq": 12,
+        "playerId": "p1",
+        "isHorizontal": true,
+        "row": 1,
+        "col": 3,
+        "madeBoxes": []
+      }
+    ],
+    "lastSeq": 12
+  }
+  ```
+  | 필드명                   | 타입     | 설명                    |
+  | --------------------- | ------ | --------------------- |
+  | roomId                | string | 방 ID                  |
+  | events                | array  | afterSeq 이후의 모든 선 이벤트 |
+  | events[].seq          | long   | 이벤트 번호                |
+  | events[].playerId     | string | 선을 그린 플레이어 ID         |
+  | events[].isHorizontal | bool   | 가로선 여부                |
+  | events[].row          | int    | row 좌표                |
+  | events[].col          | int    | col 좌표                |
+  | events[].madeBoxes    | array  | 만든 박스 정보(현재 항상 빈 배열)  |
+  | lastSeq               | long   | 반환된 이벤트 중 가장 큰 시퀀스 번호 |
+
+* 실패 (400 Bad Request)
+  ```json
+  // 1) 방을 찾을 수 없는 경우
+  { "status": "error", "errorCode": "ROOM_NOT_FOUND" }
+  ```
+  ---
