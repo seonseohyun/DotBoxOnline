@@ -374,7 +374,7 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
 });
 
 // ====================================================================
-// 5-1) 게임 시작 (/game/start)
+// 6) 게임 시작 (/game/start)
 // ====================================================================
 
 app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
@@ -452,6 +452,147 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
         CurrentTurn = room.CurrentTurn
     });
 });
+
+// ===============================================
+//  /choice : 한 플레이어가 선 하나 그리기
+// ===============================================
+app.MapPost("/choice", (ChoiceRequest req, ILogger<Program> logger) =>
+{
+    logger.LogInformation(
+        "[Choice] roomId={RoomId}, playerId={PlayerId}, isHorizontal={IsHorizontal}, row={Row}, col={Col}",
+        req.RoomId, req.PlayerId, req.IsHorizontal, req.Row, req.Col);
+
+    // 1) 방 찾기
+    if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
+    {
+        logger.LogWarning("[Choice] room not found roomId={RoomId}", req.RoomId);
+        return Results.BadRequest(new { status = "error", errorCode = "Room not found" });
+    }
+
+    // 2) 플레이어 체크
+    if (!room.Players.Contains(req.PlayerId))
+    {
+        logger.LogWarning("[Choice] player not in room roomId={RoomId}, playerId={PlayerId}",
+            req.RoomId, req.PlayerId);
+        return Results.BadRequest(new { status = "error", errorCode = "Player not in room" });
+    }
+
+    // 3) 게임 시작 여부
+    if (!room.GameStarted)
+    {
+        logger.LogWarning("[Choice] game not started roomId={RoomId}", req.RoomId);
+        return Results.BadRequest(new { status = "error", errorCode = "Game not started" });
+    }
+
+    // 4) 턴 체크
+    if (room.CurrentTurn != req.PlayerId)
+    {
+        logger.LogWarning("[Choice] not your turn roomId={RoomId}, currentTurn={CurrentTurn}, playerId={PlayerId}",
+            req.RoomId, room.CurrentTurn, req.PlayerId);
+
+        return Results.BadRequest(new
+        {
+            status = "error",
+            errorCode = "Not your turn",
+            currentTurnPlayerId = room.CurrentTurn
+        });
+    }
+
+    // 5) 이벤트 시퀀스 할당
+    var seq = room.NextSeq++;
+
+    var ev = new GameMoveEvent
+    {
+        Seq = seq,
+        RoomId = room.RoomId,
+        PlayerId = req.PlayerId,
+        IsHorizontal = req.IsHorizontal,
+        Row = req.Row,
+        Col = req.Col
+    };
+
+    room.Events.Add(ev);
+
+    // 6) 턴 넘기기 (단순 라운드 로빈)
+    if (room.TurnOrder is not null && room.TurnOrder.Count > 0)
+    {
+        var idx = room.TurnOrder.IndexOf(req.PlayerId);
+        if (idx < 0) idx = 0;
+        var nextIdx = (idx + 1) % room.TurnOrder.Count;
+        room.CurrentTurn = room.TurnOrder[nextIdx];
+    }
+
+    logger.LogInformation(
+        "[Choice] success roomId={RoomId}, seq={Seq}, nextTurn={NextTurn}",
+        room.RoomId, seq, room.CurrentTurn);
+
+    // 지금은 madeBoxes/boardCompleted는 클라에서 계산하도록 비워둠
+    return Results.Ok(new
+    {
+        status = "ok",
+        roomId = room.RoomId,
+        moveSeq = seq,
+        move = new
+        {
+            playerId = ev.PlayerId,
+            isHorizontal = ev.IsHorizontal,
+            row = ev.Row,
+            col = ev.Col
+        },
+        madeBoxes = Array.Empty<object>(),
+        nextTurnPlayerId = room.CurrentTurn,
+        boardCompleted = false
+    });
+});
+
+
+// ===============================================
+//  /draw : afterSeq 이후의 모든 선 이벤트 조회
+// ===============================================
+app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
+{
+    var startSeq = afterSeq ?? 0L;
+
+    logger.LogInformation(
+        "[Draw] request roomId={RoomId}, afterSeq={AfterSeq}",
+        roomId, startSeq);
+
+    if (!RoomStore.Rooms.TryGetValue(roomId, out var room))
+    {
+        logger.LogWarning("[Draw] room not found roomId={RoomId}", roomId);
+        return Results.BadRequest(new { status = "error", errorCode = "ROOM_NOT_FOUND" });
+    }
+
+    // 해당 시퀀스 이후 이벤트만
+    var events = room.Events
+        .Where(e => e.Seq > startSeq)
+        .OrderBy(e => e.Seq)
+        .Select(e => new
+        {
+            seq = e.Seq,
+            playerId = e.PlayerId,
+            isHorizontal = e.IsHorizontal,
+            row = e.Row,
+            col = e.Col,
+            madeBoxes = Array.Empty<object>()
+        })
+        .ToList();
+
+    var lastSeq = events.Count > 0 ? events[^1].seq : startSeq;
+
+    logger.LogInformation(
+        "[Draw] response roomId={RoomId}, count={Count}, lastSeq={LastSeq}",
+        roomId, events.Count, lastSeq);
+
+    return Results.Ok(new
+    {
+        roomId,
+        events,
+        lastSeq
+    });
+});
+
+
 
 app.Run();
 
@@ -546,7 +687,7 @@ public class GameRoom
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     // 좌표 이벤트 로그
-    // public List<GamePointEvent> Events { get; set; } = new();
+    public List<GameMoveEvent> Events { get; set; } = new();
 
     public long NextSeq { get; set; } = 1;  // 이벤트 시퀀스 번호
 
@@ -607,4 +748,25 @@ public class LeaveRoomRequest
 {
     public string RoomId { get; set; } = default!;
     public string PlayerId { get; set; } = default!;
+}
+
+// (/choice 요청 Body 모델)
+public class ChoiceRequest
+{
+    public string RoomId { get; set; } = default!;
+    public string PlayerId { get; set; } = default!;
+    public bool IsHorizontal { get; set; }
+    public int Row { get; set; }
+    public int Col { get; set; }
+}
+
+// 게임 진행 중 하나의 "선 그리기" 이벤트
+public class GameMoveEvent
+{
+    public long Seq { get; set; }
+    public string RoomId { get; set; } = default!;
+    public string PlayerId { get; set; } = default!;
+    public bool IsHorizontal { get; set; }
+    public int Row { get; set; }
+    public int Col { get; set; }
 }
