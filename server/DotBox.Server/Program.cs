@@ -350,12 +350,13 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
 
     //[Debug] 방 상태 응답 로그
     logger.LogInformation(
-        "[RoomState] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, isFull={IsFull}, currentTurn={CurrentTurn}",
+        "[RoomState] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, isFull={IsFull}, currentTurn={CurrentTurn}, gameRound={GameRound}",
         room.RoomId,
         room.InviteCode,
         string.Join(",", room.Players),
         room.IsFull,
-        room.CurrentTurn
+        room.CurrentTurn,
+        room.gameRound // 요거 추가됨
     );
 
     var playersInfos = PlayerMapper.ToPlayerInfos(room.Players);
@@ -369,7 +370,8 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
         playersInfos,
         room.MaxPlayers,
         CurrentTurn = room.CurrentTurn,
-        room.IsFull
+        room.IsFull,
+        gameRound = room.gameRound // 요거 추가됨 -> 클라에서 쓸 라운드 번호 보내주기
     });
 });
 
@@ -383,13 +385,14 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
     logger.LogInformation("[GameStart] request roomId={RoomId}, playerId={PlayerId}",
         req.RoomId, req.PlayerId);
 
+    // 1) 방 찾기
     if (!RoomStore.Rooms.TryGetValue(req.RoomId, out var room))
     {
         //[Debug] 방 없음 로그
         logger.LogWarning("[GameStart] room not found roomId={RoomId}", req.RoomId);
         return Results.BadRequest(new { error = "Room not found" });
     }
-
+    // 2) 플레이어 체크
     if (!room.Players.Contains(req.PlayerId))
     {
         //[Debug] 방에 없는 플레이어 로그
@@ -397,7 +400,7 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
             req.RoomId, req.PlayerId);
         return Results.BadRequest(new { error = "Player not in room" });
     }
-
+    // 3) 최소 인원 체크
     if (room.Players.Count < 2)
     {
         //[Debug] 인원 부족 로그
@@ -405,15 +408,16 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
             req.RoomId, room.Players.Count);
         return Results.BadRequest(new { error = "Need at least 2 players to start" });
     }
+    // ★ 4) 이미 시작된 게임이더라도 /game/start로 재시작 허용
+    var isRestart = room.GameStarted;
 
-    if (room.GameStarted)
-    {
-        //[Debug] 이미 시작된 게임 로그
-        logger.LogInformation("[GameStart] already started roomId={RoomId}", req.RoomId);
-        return Results.BadRequest(new { error = "Game already started" });
-    }
 
-    // 방장 정보가 HostId에 있고, Players 리스트는 [방장, 2번, 3번] 순으로 유지된다고 가정
+    // ★ 5) 라운드 증가 + 보드/이벤트 리셋
+    room.gameRound++;        // 0 -> 1, 1 -> 2, ...
+    room.Events.Clear();     // 이전 라운드 이벤트 로그 비우기
+    room.NextSeq = 1;        // 시퀀스 번호도 초기화
+
+    // 6) 턴 순서 결정: 방장 먼저, 그 다음 입장 순서 - 기존 로직 유지할게요~
     var ordered = room.Players
         .OrderBy(p => p == room.HostId ? 0 : 1)            // 방장 먼저
         .ThenBy(p => room.Players.IndexOf(p))              // 그 다음 입장 순서
@@ -421,12 +425,15 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
 
     room.TurnOrder = ordered;
     room.CurrentTurn = room.TurnOrder[0];    // 항상 방장부터
-    room.GameStarted = true;
+    room.GameStarted = true;                     // 게임 중이라는 표시
 
-    //[Debug] 턴 순서/첫 플레이어 로그
-    logger.LogInformation("[GameStart] started roomId={RoomId}, hostId={HostId}, players={Players}, turnOrder={TurnOrder}, firstPlayer={FirstPlayer}",
+    // [Debug] 턴 순서/첫 플레이어 + 라운드 로그
+    logger.LogInformation(
+        "[GameStart] {Mode} roomId={RoomId}, hostId={HostId}, gameRound={GameRound}, players={Players}, turnOrder={TurnOrder}, firstPlayer={FirstPlayer}",
+        isRestart ? "restart" : "start",
         room.RoomId,
         room.HostId,
+        room.gameRound,
         string.Join(",", room.Players),
         string.Join(",", room.TurnOrder),
         room.CurrentTurn);
@@ -449,7 +456,9 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
         turnOrderInfos,
 
         firstPlayer = room.TurnOrder[0],
-        CurrentTurn = room.CurrentTurn
+        CurrentTurn = room.CurrentTurn,
+
+        gameRound = room.gameRound
     });
 });
 
@@ -581,12 +590,13 @@ app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
     var lastSeq = events.Count > 0 ? events[^1].seq : startSeq;
 
     logger.LogInformation(
-        "[Draw] response roomId={RoomId}, count={Count}, lastSeq={LastSeq}",
-        roomId, events.Count, lastSeq);
+        "[Draw] response roomId={RoomId}, gameRound ={gameRound} count={Count}, lastSeq={LastSeq}",
+        roomId, room.gameRound, events.Count, lastSeq);
 
     return Results.Ok(new
     {
         roomId,
+        gameRound = room.gameRound,
         events,
         lastSeq
     });
@@ -695,6 +705,8 @@ public class GameRoom
     public bool IsFull => Players.Count >= MaxPlayers;
 
     public string? CurrentTurn { get; set;  } //현재 턴인 플레이어 ID (게임 시작 전에는 null)
+
+    public int gameRound { get; set; } = 0; //게임 라운드 카운터
 }
 
 // (/connect 요청 Body 모델)

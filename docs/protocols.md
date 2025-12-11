@@ -420,7 +420,9 @@ curl http://43.201.40.98:8080/players
         "playerName": "friend"
       }
     ],
-    "isFull": false
+    "isFull": false,
+    "gameRound": 1     // ★ 추가됨
+
   }
   ```
   | 필드명         | 타입       | 설명                     |
@@ -430,6 +432,7 @@ curl http://43.201.40.98:8080/players
   | players     | string[] | 방에 속한 플레이어 ID 목록       |
   | playerInfos | object[] | 각 플레이어의 ID/이름 정보 목록    |
   | isFull      | bool     | 현재 인원이 최대 인원에 도달했는지 여부 |
+  | gameRound   | int      | 현재 방의 게임 라운드 번호 |
 
 * 실패 (404 Not Found)
     ```json
@@ -480,7 +483,8 @@ curl http://43.201.40.98:8080/players
       "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3"
     ],
     "firstPlayer": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
-    "currentTurn": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
+    "currentTurn": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
+    "gameRound": 1   // ★ 추가됨
   }
   ```
     
@@ -492,6 +496,7 @@ curl http://43.201.40.98:8080/players
   | turnOrder   | string[] | 이번 게임의 턴 순서                         |
   | firstPlayer | string   | 첫 턴을 진행할 플레이어 ID                       |
   | currentTurn | string   | 현재 턴인 플레이어 ID (게임 시작 직후 = firstPlayer) |
+  | gameRound   | int      | 현재 게임 라운드 번호. /game/start 호출 시 증가|
 
 * 실패 (400 Bad Request)
   ```json
@@ -609,6 +614,7 @@ GET /draw?roomId=abc123&afterSeq=10
   ```json
   {
     "roomId": "abc123",
+    "gameRound": 2,     // ★ 추가됨
     "events": [
       {
         "seq": 11,
@@ -641,6 +647,7 @@ GET /draw?roomId=abc123&afterSeq=10
   | events[].col          | int    | col 좌표                |
   | events[].madeBoxes    | array  | 만든 박스 정보(현재 항상 빈 배열)  |
   | lastSeq               | long   | 반환된 이벤트 중 가장 큰 시퀀스 번호 |
+  | gameRound | int | 현재 방의 라운드 번호. 클라는 이 값이 바뀌면 새로운 게임판으로 리셋해야 한다 |
 
 * 실패 (400 Bad Request)
   ```json
