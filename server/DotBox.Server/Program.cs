@@ -131,7 +131,7 @@ app.MapGet("/players", (ILogger<Program> logger) =>
 app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
 {
     //[Debug] 방 생성 요청 로그
-    logger.LogInformation("[RoomCreate] request playerId={PlayerId}", req.PlayerId);
+    logger.LogInformation("[RoomCreate] request playerId={PlayerId}, maxPlayers={MaxPlayers}", req.PlayerId, req.MaxPlayers);
 
     // 1) playerId 존재하는지 확인
     if (!SessionStore.Players.ContainsKey(req.PlayerId))
