@@ -556,20 +556,29 @@ curl http://43.201.40.98:8080/players
       "row": 1,
       "col": 3
     },
-    "madeBoxes": [],
+    "madeBoxes": [
+      { "row": 0, "col": 0 }],
     "nextTurnPlayerId": "p2",
     "boardCompleted": false
   }
   ```
-  | 필드명              | 타입     | 설명                           |
-  | ---------------- | ------ | ----------------------------    |
-  | status           | string | `"ok"`                          |
-  | roomId           | string | 방 ID                            |
-  | moveSeq          | long   | 이번 선 이벤트의 고유 시퀀스 번호        |
-  | move             | object | 이번에 그린 선 정보                  |
-  | madeBoxes        | array  | 새로 만들어진 박스 정보(현재는 항상 빈 배열)   |
-  | nextTurnPlayerId | string | 다음 턴 플레이어 ID                 |
-  | boardCompleted   | bool   | 게임판이 완성되었는지 여부 (현재 항상 false) |
+| 필드명               | 타입       | 설명                        |
+| ----------------- | -------- | ------------------------- |
+| status            | string   | 성공 시 `"ok"`               |
+| roomId            | string   | 방 ID                      |
+| gameRound         | int      | 현재 게임 라운드 번호              |
+| moveSeq           | long     | 이번 move 이벤트 시퀀스 번호        |
+| move              | object   | 그린 선 정보                   |
+| move.playerId     | string   | 선을 그린 플레이어 ID             |
+| move.isHorizontal | bool     | 가로선 여부                    |
+| move.row          | int      | 선 위치 row                  |
+| move.col          | int      | 선 위치 col                  |
+| madeBoxes         | object[] | 이번 선으로 완성된 박스 목록          |
+| madeBoxes[].row   | int      | 박스 좌표 row                 |
+| madeBoxes[].col   | int      | 박스 좌표 col                 |
+| extraTurn         | bool     | 박스를 만들었는지 여부 (true면 턴 유지) |
+| nextTurnPlayerId  | string   | 다음 턴 플레이어 ID              |
+| boardCompleted    | bool     | 보드가 모두 완성되었는지 여부          |
 
 * 실패 (400 Bad Request)
   ```json
@@ -588,6 +597,9 @@ curl http://43.201.40.98:8080/players
     "errorCode": "Not your turn",
     "currentTurnPlayerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3"
   }
+
+  // 5) 유효하지 않거나 중복된 선
+  { "status": "error", "errorCode": "INVALID_OR_DUPLICATED_LINE" }
   ```
 ---
 ## 8-2. 선 이벤트 조회 (GET /draw)
@@ -604,7 +616,8 @@ curl http://43.201.40.98:8080/players
 ```http
 GET /draw?roomId=abc123&afterSeq=10
 ```
-| 파라미터     | 타입     | 필수 | 설명                          |
+
+| 파라미터    | 타입   | 필수 | 설명                          |
 | -------- | ------ | -- | --------------------------- |
 | roomId   | string | O  | 방 ID                        |
 | afterSeq | long   | X  | 해당 시퀀스보다 큰 이벤트만 조회 (기본값: 0) |
@@ -630,24 +643,28 @@ GET /draw?roomId=abc123&afterSeq=10
         "isHorizontal": true,
         "row": 1,
         "col": 3,
-        "madeBoxes": []
+        "madeBoxes": [
+        { "row": 0, "col": 0 }
+      ]
       }
     ],
     "lastSeq": 12
   }
   ```
-  | 필드명                   | 타입     | 설명                    |
-  | --------------------- | ------ | --------------------- |
-  | roomId                | string | 방 ID                  |
-  | events                | array  | afterSeq 이후의 모든 선 이벤트 |
-  | events[].seq          | long   | 이벤트 번호                |
-  | events[].playerId     | string | 선을 그린 플레이어 ID         |
-  | events[].isHorizontal | bool   | 가로선 여부                |
-  | events[].row          | int    | row 좌표                |
-  | events[].col          | int    | col 좌표                |
-  | events[].madeBoxes    | array  | 만든 박스 정보(현재 항상 빈 배열)  |
-  | lastSeq               | long   | 반환된 이벤트 중 가장 큰 시퀀스 번호 |
-  | gameRound | int | 현재 방의 라운드 번호. 클라는 이 값이 바뀌면 새로운 게임판으로 리셋해야 한다 |
+| 필드명                      | 타입       | 설명                               |
+| ------------------------ | -------- | -------------------------------- |
+| roomId                   | string   | 방 ID                             |
+| gameRound                | int      | 현재 게임 라운드 번호                     |
+| events                   | object[] | afterSeq 이후의 move 이벤트 목록         |
+| events[].seq             | long     | 이벤트 시퀀스 번호                       |
+| events[].playerId        | string   | 선을 그린 플레이어 ID                    |
+| events[].isHorizontal    | bool     | 가로선 여부                           |
+| events[].row             | int      | 선 위치 row                         |
+| events[].col             | int      | 선 위치 col                         |
+| events[].madeBoxes       | object[] | 해당 move로 완성된 박스 목록               |
+| events[].madeBoxes[].row | int      | 박스 좌표 row                        |
+| events[].madeBoxes[].col | int      | 박스 좌표 col                        |
+| lastSeq                  | long     | 반환된 이벤트 중 마지막 seq (없으면 afterSeq) |
 
 * 실패 (400 Bad Request)
   ```json

@@ -416,6 +416,7 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
     room.gameRound++;        // 0 -> 1, 1 -> 2, ...
     room.Events.Clear();     // 이전 라운드 이벤트 로그 비우기
     room.NextSeq = 1;        // 시퀀스 번호도 초기화
+    room.InitBoard(dotCount: 5); // 5x5 점 -> 4x4 박스 보드 초기화
 
     // 6) 턴 순서 결정: 방장 먼저, 그 다음 입장 순서 - 기존 로직 유지할게요~
     var ordered = room.Players
@@ -506,10 +507,22 @@ app.MapPost("/choice", (ChoiceRequest req, ILogger<Program> logger) =>
             currentTurnPlayerId = room.CurrentTurn
         });
     }
-
     // 5) 이벤트 시퀀스 할당
     var seq = room.NextSeq++;
 
+    // 5-1) 선 반영 (중복/범위 체크)
+    var applied = TryApplyLine(room, req.IsHorizontal, req.Row, req.Col);
+    if (!applied)
+    {
+        logger.LogWarning("[Choice] invalid or duplicated line roomId={RoomId}, playerId={PlayerId}", req.RoomId, req.PlayerId);
+        return Results.BadRequest(new { status = "error", errorCode = "INVALID_OR_DUPLICATED_LINE" });
+    }
+
+    // 5-2) 박스 완성 체크
+    var made = CheckNewBoxes(room, req.IsHorizontal, req.Row, req.Col, req.PlayerId);
+    var extraTurn = made.Count > 0;
+
+    // 이벤트에 기록(선택)
     var ev = new GameMoveEvent
     {
         Seq = seq,
@@ -517,25 +530,19 @@ app.MapPost("/choice", (ChoiceRequest req, ILogger<Program> logger) =>
         PlayerId = req.PlayerId,
         IsHorizontal = req.IsHorizontal,
         Row = req.Row,
-        Col = req.Col
+        Col = req.Col,
+        MadeBoxes = made.Select(b => new BoxDto { Row = b.br, Col = b.bc }).ToList()
     };
 
     room.Events.Add(ev);
 
-    // 6) 턴 넘기기 (단순 라운드 로빈)
-    if (room.TurnOrder is not null && room.TurnOrder.Count > 0)
-    {
-        var idx = room.TurnOrder.IndexOf(req.PlayerId);
-        if (idx < 0) idx = 0;
-        var nextIdx = (idx + 1) % room.TurnOrder.Count;
-        room.CurrentTurn = room.TurnOrder[nextIdx];
-    }
+    // ✅ 6) 턴 결정: 박스 만들었으면 턴 유지, 아니면 다음 턴
+    room.CurrentTurn = extraTurn ? req.PlayerId : GetNextTurn(room, req.PlayerId);
 
     logger.LogInformation(
-        "[Choice] success roomId={RoomId}, seq={Seq}, nextTurn={NextTurn}",
-        room.RoomId, seq, room.CurrentTurn);
+        "[Choice] success roomId={RoomId}, seq={Seq}, madeBoxes={MadeCount}, extraTurn={ExtraTurn}, nextTurn={NextTurn}",
+        room.RoomId, seq, made.Count, extraTurn, room.CurrentTurn);
 
-    // 지금은 madeBoxes/boardCompleted는 클라에서 계산하도록 비워둠
     return Results.Ok(new
     {
         status = "ok",
@@ -548,7 +555,8 @@ app.MapPost("/choice", (ChoiceRequest req, ILogger<Program> logger) =>
             row = ev.Row,
             col = ev.Col
         },
-        madeBoxes = Array.Empty<object>(),
+        madeBoxes = ev.MadeBoxes.Select(b => new { row = b.Row, col = b.Col }).ToArray(),
+        extraTurn,
         nextTurnPlayerId = room.CurrentTurn,
         boardCompleted = false
     });
@@ -583,7 +591,11 @@ app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
             isHorizontal = e.IsHorizontal,
             row = e.Row,
             col = e.Col,
-            madeBoxes = Array.Empty<object>()
+            // ✅ 서버가 판정한 "이번 선으로 완성된 박스"를 같이 내려줌
+            // 클라는 이 좌표를 받아서 박스 색칠/점수 반영만 하면 됨
+            madeBoxes = (e.MadeBoxes ?? new List<BoxDto>())
+            .Select(b => new { row = b.Row, col = b.Col })
+            .ToArray()        
         })
         .ToList();
 
@@ -603,8 +615,117 @@ app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
 });
 
 
-
 app.Run();
+
+// ====================================================================
+//                    게임 로직 유틸 함수
+// ====================================================================
+
+static bool TryApplyLine(GameRoom room, bool isHorizontal, int row, int col)
+{
+    if (room.HLines == null || room.VLines == null) return false;
+
+    var n = room.DotCount;
+
+    if (isHorizontal)
+    {
+        // row: 0..n-1, col: 0..n-2
+        if (row < 0 || row >= n || col < 0 || col >= n - 1) return false;
+        if (room.HLines[row, col]) return false; // 이미 그려진 선
+        room.HLines[row, col] = true;
+        return true;
+    }
+    else
+    {
+        // row: 0..n-2, col: 0..n-1
+        if (row < 0 || row >= n - 1 || col < 0 || col >= n) return false;
+        if (room.VLines[row, col]) return false;
+        room.VLines[row, col] = true;
+        return true;
+    }
+}
+
+static bool IsBoxComplete(GameRoom room, int br, int bc)
+{
+    // 박스 (br,bc)의 4변이 모두 그려졌는지
+    // top:    HLines[br, bc]
+    // bottom: HLines[br+1, bc]
+    // left:   VLines[br, bc]
+    // right:  VLines[br, bc+1]
+    var H = room.HLines!;
+    var V = room.VLines!;
+    return H[br, bc] && H[br + 1, bc] && V[br, bc] && V[br, bc + 1];
+}
+
+static List<(int br, int bc)> CheckNewBoxes(GameRoom room, bool isHorizontal, int row, int col, string playerId)
+{
+    var made = new List<(int br, int bc)>();
+    if (room.BoxOwner == null || room.HLines == null || room.VLines == null) return made;
+
+    var n = room.DotCount;
+    var owner = room.BoxOwner;
+
+    // 이번에 그은 선 주변의 “최대 2개” 박스만 확인하면 됨
+    if (isHorizontal)
+    {
+        // 위 박스: br=row-1, bc=col
+        if (row - 1 >= 0)
+        {
+            int br = row - 1, bc = col;
+            if (owner[br, bc] == null && IsBoxComplete(room, br, bc))
+            {
+                owner[br, bc] = playerId;
+                made.Add((br, bc));
+            }
+        }
+
+        // 아래 박스: br=row, bc=col
+        if (row <= n - 2)
+        {
+            int br = row, bc = col;
+            if (owner[br, bc] == null && IsBoxComplete(room, br, bc))
+            {
+                owner[br, bc] = playerId;
+                made.Add((br, bc));
+            }
+        }
+    }
+    else
+    {
+        // 왼쪽 박스: br=row, bc=col-1
+        if (col - 1 >= 0)
+        {
+            int br = row, bc = col - 1;
+            if (owner[br, bc] == null && IsBoxComplete(room, br, bc))
+            {
+                owner[br, bc] = playerId;
+                made.Add((br, bc));
+            }
+        }
+
+        // 오른쪽 박스: br=row, bc=col
+        if (col <= n - 2)
+        {
+            int br = row, bc = col;
+            if (owner[br, bc] == null && IsBoxComplete(room, br, bc))
+            {
+                owner[br, bc] = playerId;
+                made.Add((br, bc));
+            }
+        }
+    }
+
+    return made;
+}
+
+static string GetNextTurn(GameRoom room, string currentPlayerId)
+{
+    if (room.TurnOrder is null || room.TurnOrder.Count == 0) return currentPlayerId;
+    var idx = room.TurnOrder.IndexOf(currentPlayerId);
+    if (idx < 0) idx = 0;
+    return room.TurnOrder[(idx + 1) % room.TurnOrder.Count];
+}
+
 
 // ====================================================================
 //                              타입 정의 구역
@@ -707,6 +828,26 @@ public class GameRoom
     public string? CurrentTurn { get; set;  } //현재 턴인 플레이어 ID (게임 시작 전에는 null)
 
     public int gameRound { get; set; } = 0; //게임 라운드 카운터
+
+    // ===== 보드 상태(박스 체크) =====
+    public int DotCount { get; private set; } = 0;
+
+    // HLines[r,c] : (r,c) ~ (r,c+1) 가로선 (r:0..DotCount-1, c:0..DotCount-2)
+    public bool[,]? HLines { get; private set; }
+
+    // VLines[r,c] : (r,c) ~ (r+1,c) 세로선 (r:0..DotCount-2, c:0..DotCount-1)
+    public bool[,]? VLines { get; private set; }
+
+    // BoxOwner[br,bc] : 박스 주인 playerId (br:0..DotCount-2, bc:0..DotCount-2)
+    public string?[,]? BoxOwner { get; private set; }
+    public void InitBoard(int dotCount)
+        {
+            DotCount = dotCount;
+
+            HLines = new bool[dotCount, dotCount - 1];
+            VLines = new bool[dotCount - 1, dotCount];
+            BoxOwner = new string?[dotCount - 1, dotCount - 1];
+        }
 }
 
 // (/connect 요청 Body 모델)
@@ -773,6 +914,12 @@ public class ChoiceRequest
 }
 
 // 게임 진행 중 하나의 "선 그리기" 이벤트
+public class BoxDto
+{
+    public int Row { get; set; }
+    public int Col { get; set; }
+}
+
 public class GameMoveEvent
 {
     public long Seq { get; set; }
@@ -781,4 +928,6 @@ public class GameMoveEvent
     public bool IsHorizontal { get; set; }
     public int Row { get; set; }
     public int Col { get; set; }
+
+    public List<BoxDto>? MadeBoxes { get; set; } // ✅ 추가
 }
