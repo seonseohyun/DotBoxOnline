@@ -141,12 +141,22 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
         return Results.BadRequest(new { error = "Invalid playerId" });
     }
 
+    // maxPlayers 유효성 (2 또는 3만 허용 - 필요하면 범위 늘리기)
+    var maxPlayers = req.MaxPlayers ?? 3;
+    if (maxPlayers is < 2 or > 3)
+    {
+        return Results.BadRequest(new { error = "Invalid maxPlayers (allowed: 2 or 3)" });
+    }
+
     // 2) 새 방 객체 생성
     var room = new GameRoom
     {
-        RoomId = Guid.NewGuid().ToString("N"),      // 고유한 방 ID 생성
+        RoomId = Guid.NewGuid().ToString("N"),       // 고유한 방 ID 생성
         InviteCode = InviteCodeGenerator.Generate(6),// 6자리 초대코드 생성
-        HostId = req.PlayerId             // [NEW] 방장 = 방 만든 사람
+        HostId = req.PlayerId,                       // [NEW] 방장 = 방 만든 사람
+
+        // ✅ 핵심: 요청값으로 방 정원 저장 (2인/3인 방 지원)
+        MaxPlayers = maxPlayers
     };
 
     // 3) 방 만든 사람은 자동으로 입장 (players 리스트에 추가)
@@ -167,16 +177,16 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
     // 6) 클라이언트에게 방 정보와 초대코드 알려주기
     return Results.Ok(new
     {
-        room.RoomId,            //방 ID
-        room.InviteCode,        //초대 코드
-        players = room.Players, //방에 있는 플레이어 ID 리스트
+        room.RoomId,             //방 ID
+        room.InviteCode,         //초대 코드
+        players = room.Players,  //방에 있는 플레이어 ID 리스트
         playerInfos,             // 이름 포함 리스트
-        room.MaxPlayers,        //최대 플레이어 수 (3)
-        room.IsFull,            //방이 가득 찼는지 여부
-        room.CurrentTurn        //null 반환
+        // room 상태 기준으로 내려줌
+        maxPlayers = room.MaxPlayers,
+        isFull = room.IsFull,
+        currentTurn = room.CurrentTurn //null 반환
     });
 });
-
 
 // 방 입장 (/room/join)
 app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =>
@@ -206,14 +216,18 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =
         logger.LogInformation("[RoomJoin] player already in room roomId={RoomId}, playerId={PlayerId}",
             room.RoomId, req.PlayerId);
 
-        return Results.Ok(new
-        {
-            status = "ok",
-            room.RoomId,
-            room.InviteCode,
-            players = room.Players,
-            playerInfos
-        });
+    return Results.Ok(new
+    {
+        status = "ok",
+        room.RoomId,
+        room.InviteCode,
+        players = room.Players,
+        playerInfos,
+        maxPlayers = room.MaxPlayers,
+        isFull = room.IsFull,
+        currentTurn = room.CurrentTurn
+    });
+
     }
 
     // 여기까지 왔다는 건, 아직 방에 안 들어간 새 플레이어라는 뜻
@@ -233,12 +247,17 @@ app.MapPost("/room/join", (JoinRoomByCodeRequest req, ILogger<Program> logger) =
     logger.LogInformation("[RoomJoin] joined roomId={RoomId}, inviteCode={InviteCode}, players={Players}, currentTurn={CurrentTurn}",
         room.RoomId, room.InviteCode, string.Join(",", room.Players), room.CurrentTurn);
 
+    var playerInfos2 = PlayerMapper.ToPlayerInfos(room.Players);
     return Results.Ok(new
     {
         status = "ok",
         room.RoomId,
         room.InviteCode,
-        Players = room.Players
+        players = room.Players,        // casing 통일 (players)
+        playerInfos = playerInfos2,    // 이름 포함
+        maxPlayers = room.MaxPlayers,  // 방 상태
+        isFull = room.IsFull,          // 방 상태
+        currentTurn = room.CurrentTurn // 있으면 내려줌
     });
 });
 
@@ -368,9 +387,9 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
         room.InviteCode,
         players = room.Players,
         playersInfos,
-        room.MaxPlayers,
-        CurrentTurn = room.CurrentTurn,
-        room.IsFull,
+        maxPlayers = room.MaxPlayers,
+        isFull = room.Players.Count >= room.MaxPlayers,
+        currentTurn = room.CurrentTurn,
         gameRound = room.gameRound // 요거 추가됨 -> 클라에서 쓸 라운드 번호 보내주기
     });
 });
@@ -860,6 +879,7 @@ public class ConnectRequest
 public class CreateRoomRequest
 {
     public string PlayerId { get; set; } = default!;
+    public int? MaxPlayers { get; set; } 
 }
 
 // (/room/join 요청 Body 모델)
