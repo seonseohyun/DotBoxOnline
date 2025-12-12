@@ -148,7 +148,12 @@ app.MapGet("/players", (ILogger<Program> logger) =>
 app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
 {
     //[Debug] 방 생성 요청 로그
-    logger.LogInformation("[RoomCreate] request playerId={PlayerId}, maxPlayers={MaxPlayers}", req.PlayerId, req.MaxPlayers);
+logger.LogInformation(
+    "[RoomCreate] request received playerId={PlayerId}, maxPlayers={MaxPlayers}, hasMaxPlayers={HasMaxPlayers}",
+    req.PlayerId,
+    req.MaxPlayers,
+    req.MaxPlayers.HasValue
+);
 
     // 1) playerId 존재하는지 확인
     if (!SessionStore.Players.ContainsKey(req.PlayerId))
@@ -186,7 +191,7 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
     RoomStore.Rooms[room.RoomId] = room;
 
     //[Debug] 생성된 방 정보 로그
-    logger.LogInformation("[RoomCreate] roomId={RoomId}, hostId={HostId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}",
+    logger.LogInformation("[DONE!! - RoomCreate] roomId={RoomId}, hostId={HostId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}",
         room.RoomId, room.HostId, room.InviteCode, string.Join(",", room.Players), room.MaxPlayers);
 
     var playerInfos = PlayerMapper.ToPlayerInfos(room.Players);
