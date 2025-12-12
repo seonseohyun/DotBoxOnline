@@ -3,7 +3,7 @@ GET http://43.201.40.98:8080/health
 
 
 ### 2) 플레이어1 접속
-#P1: 6b0795ff0f0f4c74ba693525f40a813c
+#P1: 55f2cb86bc864e2c989b9a6d4a0a42f9
 POST http://43.201.40.98:8080/connect
 Content-Type: application/json
 
@@ -12,7 +12,7 @@ Content-Type: application/json
 }
 
 ### 3) 플레이어2 접속
-#P2: f76726e5347b47bcb7993bcc1a74eca4
+#P2: 50054ccb9a544e08ba642d79e3a486be
 POST http://43.201.40.98:8080/connect
 Content-Type: application/json
 
@@ -37,7 +37,8 @@ POST http://43.201.40.98:8080/room/create
 Content-Type: application/json
 
 {
-  "playerId": "6b0795ff0f0f4c74ba693525f40a813c"
+  "playerId": "55f2cb86bc864e2c989b9a6d4a0a42f9",
+  "maxPlayers": 2
 }
 
 

@@ -179,7 +179,8 @@ curl http://43.201.40.98:8080/players
 ### Request Body:
 ```json
 {
-  "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3"
+  "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
+  "maxPlayers": 2
 }
 ```
 | 필드명      | 타입    | 필수 | 설명                                      |
