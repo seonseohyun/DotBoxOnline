@@ -148,12 +148,8 @@ app.MapGet("/players", (ILogger<Program> logger) =>
 app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
 {
     //[Debug] 방 생성 요청 로그
-logger.LogInformation(
-    "[RoomCreate] request received playerId={PlayerId}, maxPlayers={MaxPlayers}, hasMaxPlayers={HasMaxPlayers}",
-    req.PlayerId,
-    req.MaxPlayers,
-    req.MaxPlayers.HasValue
-);
+    logger.LogInformation("[RoomCreate] request playerId={PlayerId}, maxPlayers={MaxPlayers}",
+        req.PlayerId, req.MaxPlayers);
 
     // 1) playerId 존재하는지 확인
     if (!SessionStore.Players.ContainsKey(req.PlayerId))
@@ -390,15 +386,15 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
     }
 
     //[Debug] 방 상태 응답 로그
-    logger.LogInformation(
-        "[RoomState] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, isFull={IsFull}, currentTurn={CurrentTurn}, gameRound={GameRound}",
-        room.RoomId,
-        room.InviteCode,
-        string.Join(",", room.Players),
-        room.IsFull,
-        room.CurrentTurn,
-        room.gameRound // 요거 추가됨
-    );
+    // logger.LogInformation(
+    //     "[RoomState] roomId={RoomId}, inviteCode={InviteCode}, players={Players}, isFull={IsFull}, currentTurn={CurrentTurn}, gameRound={GameRound}",
+    //     room.RoomId,
+    //     room.InviteCode,
+    //     string.Join(",", room.Players),
+    //     room.IsFull,
+    //     room.CurrentTurn,
+    //     room.gameRound // 요거 추가됨
+    // );
 
     var playersInfos = PlayerMapper.ToPlayerInfos(room.Players);
 
@@ -611,9 +607,9 @@ app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
 {
     var startSeq = afterSeq ?? 0L;
 
-    logger.LogInformation(
-        "[Draw] request roomId={RoomId}, afterSeq={AfterSeq}",
-        roomId, startSeq);
+    // logger.LogInformation(
+    //     "[Draw] request roomId={RoomId}, afterSeq={AfterSeq}",
+    //     roomId, startSeq);
 
     if (!RoomStore.Rooms.TryGetValue(roomId, out var room))
     {
@@ -642,9 +638,9 @@ app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
 
     var lastSeq = events.Count > 0 ? events[^1].seq : startSeq;
 
-    logger.LogInformation(
-        "[Draw] response roomId={RoomId}, gameRound ={gameRound} count={Count}, lastSeq={LastSeq}",
-        roomId, room.gameRound, events.Count, lastSeq);
+    // logger.LogInformation(
+    //     "[Draw] response roomId={RoomId}, gameRound ={gameRound} count={Count}, lastSeq={LastSeq}",
+    //     roomId, room.gameRound, events.Count, lastSeq);
 
     return Results.Ok(new
     {
@@ -971,5 +967,5 @@ public class GameMoveEvent
     public int Row { get; set; }
     public int Col { get; set; }
 
-    public List<BoxDto>? MadeBoxes { get; set; } // ✅ 추가
+    public List<BoxDto>? MadeBoxes { get; set; } // 추가
 }
