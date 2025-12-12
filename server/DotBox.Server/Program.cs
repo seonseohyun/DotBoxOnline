@@ -19,21 +19,38 @@ var app = builder.Build();                         //서버 본체 생성
 
 app.Use(async (context, next) =>
 {
-    var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+    var path = context.Request.Path.Value ?? "";
 
-    //[Debug] 요청 메서드/경로/쿼리 로그
-    logger.LogInformation("[REQ] {Method} {Path}{QueryString}",
-        context.Request.Method,
-        context.Request.Path,
-        context.Request.QueryString.HasValue ? context.Request.QueryString.Value : "");
+    // ✅ 폴링/헬스 같은 잦은 요청은 로그 스킵
+    // 필요하면 더 추가해도 됨
+    bool skipLog =
+        path.StartsWith("/draw", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/room/state", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/health", StringComparison.OrdinalIgnoreCase);
+
+    if (!skipLog)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+        //[Debug] 요청 메서드/경로/쿼리 로그
+        logger.LogInformation("[REQ] {Method} {Path}{QueryString}",
+            context.Request.Method,
+            context.Request.Path,
+            context.Request.QueryString.HasValue ? context.Request.QueryString.Value : "");
+    }
 
     await next();
 
-    //[Debug] 응답 상태 코드 로그
-    logger.LogInformation("[RES] {StatusCode} {Method} {Path}",
-        context.Response.StatusCode,
-        context.Request.Method,
-        context.Request.Path);
+    if (!skipLog)
+    {
+        var logger = context.RequestServices.GetRequiredService<ILogger<Program>>();
+
+        //[Debug] 응답 상태 코드 로그
+        logger.LogInformation("[RES] {StatusCode} {Method} {Path}",
+            context.Response.StatusCode,
+            context.Request.Method,
+            context.Request.Path);
+    }
 });
 
 // ====================================================================
