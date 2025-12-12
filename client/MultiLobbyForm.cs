@@ -20,10 +20,12 @@ namespace DotsAndBoxes
         private Button btnExit;
         private string _roomId;      // 방 ID
         private string _myPlayerId;  // 내 playerId
+        private int _maxPlayers;
         private System.Windows.Forms.Timer _lobbyTimer;
         private PlayerInfo[] _playerInfos;   // 닉네임 매핑용
         private List<string> _currentPlayers = new List<string>(); // 게임 화면 상단에 띄울 "닉네임" 리스트
         private List<string> _currentPlayerIds = new List<string>(); // 서버 playerId 리스트 (호스트 판별용)
+        private int _lastJoinedGameRound = 0; //마지막으로 입장한 라운드 번호
 
 
         public MultiLobbyForm()
@@ -38,10 +40,13 @@ namespace DotsAndBoxes
             string myPlayerId,
             string inviteCode,
             string[] players,
-            PlayerInfo[] playerInfos) : this()
+            PlayerInfo[] playerInfos,
+            int lastRound ) : this()
         {
             _roomId = roomId;
             _myPlayerId = myPlayerId;
+            _lastJoinedGameRound = lastRound;
+            _maxPlayers = AppSession.MaxPlayers;
 
             // 재시작 여부 판단 
             bool isRestart =
@@ -73,6 +78,7 @@ namespace DotsAndBoxes
                 return; // 기존 코드 실행 안 함
             }
 
+            // 초대코드로 정상 입장 시
             txtInviteCode.Text = inviteCode;
             _playerInfos = playerInfos;   // 닉네임 정보 저장
             _currentPlayerIds = players != null ? players.ToList() : new List<string>(); // playerId 리스트 저장
@@ -197,6 +203,16 @@ namespace DotsAndBoxes
             lblPlayer1.Text = players.Count > 0 ? players[0] : "Waiting for Player1...";
             lblPlayer2.Text = players.Count > 1 ? players[1] : "Waiting for Player2...";
             lblPlayer3.Text = players.Count > 2 ? players[2] : "Waiting for Player3...";
+            lblPlayer1.ForeColor = Color.Black;                               
+            lblPlayer2.ForeColor = Color.Black;                              
+            lblPlayer3.ForeColor = Color.Black;
+
+            if (_maxPlayers == 2)                                             
+            {
+                // 2인 모드에서는 3번 슬롯 비활성/회색 처리                                     
+                lblPlayer3.Text = "Disabled (2P mode)";                 
+                lblPlayer3.ForeColor = Color.Gray;                        
+            }
 
             // 2) 방장 여부 판단 (players[0] = Host)
             bool iAmHost = (_currentPlayerIds.Count > 0 && _currentPlayerIds[0] == _myPlayerId);
@@ -228,7 +244,11 @@ namespace DotsAndBoxes
                 // 1) 서버에 게임 시작 요청
                 var startRes = await ServerApi.GameStartAsync(_roomId, _myPlayerId);
 
-                // 1-1) 플레이어 목록 준비
+                // 2) 게임 시작 후, 최신 방 상태 조회
+                var state = await ServerApi.GetRoomStateAsync(_roomId);
+                int gameRound = state.gameRound;
+
+                // 2-1) 플레이어 목록 준비
                 List<string> playersForGame;
 
                 if (_currentPlayers != null && _currentPlayers.Count > 0)
@@ -238,8 +258,6 @@ namespace DotsAndBoxes
                 }
                 else
                 {
-                    // 혹시 몰라서 다시 한 번 상태 조회
-                    var state = await ServerApi.GetRoomStateAsync(_roomId);
 
                     var playersIdList = state.players != null
                         ? state.players.ToList()
@@ -252,11 +270,11 @@ namespace DotsAndBoxes
 
                 // 2) 방장 자신의 화면은 바로 게임 화면으로 전환
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new GamePlayForm(5, playersForGame, _currentPlayerIds, _roomId, _myPlayerId));
+                main.LoadChildForm(new GamePlayForm(5, playersForGame, _currentPlayerIds, _roomId, _myPlayerId, gameRound));
             }
             catch (Exception ex)
             {
-                // 에러 (2명 미만, 이미 시작됨 등) -> 메시지 띄우고 다시 활성화
+                // 에러 (2명 미만, 이미 시작됨 등)메시지 띄우고 다시 활성화
                 MessageBox.Show(
                     ex.Message,
                     "게임 시작 실패",
@@ -298,13 +316,15 @@ namespace DotsAndBoxes
                     return;
 
                 // 5) 방장이 아니면 게임 시작 감지
-                if (!string.IsNullOrEmpty(state.currentTurn))
+                if (!string.IsNullOrEmpty(state.currentTurn) && state.gameRound > _lastJoinedGameRound)
                 {
+                    // 새 라운드로 갱신
+                    _lastJoinedGameRound = state.gameRound;
                     _lobbyTimer.Stop();
 
                     MainForm main = (MainForm)this.ParentForm;
-                    // 게임 화면에는 닉네임 리스트 넘김
-                    main.LoadChildForm(new GamePlayForm(5, _currentPlayers, _currentPlayerIds, _roomId, _myPlayerId));
+                    // 게임 화면에 정보넘김
+                    main.LoadChildForm(new GamePlayForm(5, _currentPlayers, _currentPlayerIds, _roomId, _myPlayerId, state.gameRound));
                 }
             }
             catch

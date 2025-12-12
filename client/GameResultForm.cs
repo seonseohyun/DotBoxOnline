@@ -13,6 +13,7 @@ namespace DotsAndBoxes
     public partial class GameResultForm : Form
     {
         private Label lblResultMessage;
+        private Label lblScoreSummary; // 점수 요약용 라벨
         private Button btnRestart;
         private Button btnGoMain;
         private Panel pnlButtonArea;
@@ -24,6 +25,7 @@ namespace DotsAndBoxes
         private GamePlayForm.AIDifficulty _aiDifficulty;
         private string _roomId;
         private string _myPlayerId;
+        private int _gameRound;
 
         // 외부에서 읽을 용도
         public GameResultAction Action { get; private set; } = GameResultAction.None;
@@ -59,11 +61,13 @@ namespace DotsAndBoxes
             List<string> players,
             GamePlayForm.AIDifficulty aiDifficulty,
             string roomId,
-            string myPlayerId)
+            string myPlayerId,
+            int gameRound)
             : this(boardSize, isAIMode, players, aiDifficulty)
         {
             _roomId = roomId;
             _myPlayerId = myPlayerId;
+            _gameRound = gameRound;
         }
 
         private void BuildUI()
@@ -80,6 +84,14 @@ namespace DotsAndBoxes
             lblResultMessage.Height = 120;
             lblResultMessage.Font = new Font("맑은 고딕", 24, FontStyle.Bold);
             lblResultMessage.TextAlign = ContentAlignment.MiddleCenter;
+
+            // === 점수 요약 라벨 ===
+            lblScoreSummary = new Label();                                  // 수정
+            lblScoreSummary.Text = "";                                      // 수정
+            lblScoreSummary.Dock = DockStyle.Top;                           // 수정
+            lblScoreSummary.Height = 40;                                    // 수정
+            lblScoreSummary.Font = new Font("맑은 고딕", 12, FontStyle.Regular); // 수정
+            lblScoreSummary.TextAlign = ContentAlignment.MiddleCenter;      // 수정
 
             // === 버튼 영역 ===
             pnlButtonArea = new Panel();
@@ -103,6 +115,7 @@ namespace DotsAndBoxes
 
             // === 폼에 컨트롤 추가 ===
             this.Controls.Add(pnlButtonArea);
+            this.Controls.Add(lblScoreSummary);
             this.Controls.Add(lblResultMessage);
         }
 
@@ -118,7 +131,7 @@ namespace DotsAndBoxes
             }
             else
             {
-                main.LoadChildForm(new MultiLobbyForm(_roomId, _myPlayerId, null, null, null));
+                main.LoadChildForm(new MultiLobbyForm(_roomId, _myPlayerId, null, null, null, _gameRound));
             }
 
         }
@@ -135,6 +148,12 @@ namespace DotsAndBoxes
         public void SetResultText(string resultText)
         {
             lblResultMessage.Text = resultText;
+        }
+
+        // 점수 요약 텍스트 바꾸는 용도
+        public void SetScoreSummary(string summaryText)
+        {
+            lblScoreSummary.Text = summaryText;
         }
     }
 }
