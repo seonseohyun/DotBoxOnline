@@ -338,7 +338,7 @@ app.MapPost("/room/leave", (LeaveRoomRequest req, ILogger<Program> logger) =>
 app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
 {
     //[Debug] 방 상태 조회 요청 로그
-    logger.LogInformation("[RoomState] request roomId={RoomId}", roomId);
+    // logger.LogInformation("[RoomState] request roomId={RoomId}", roomId);
 
     // roomId로 방 찾기 (TryGetValue: 있으면 true, 없으면 false)
     if (!RoomStore.Rooms.TryGetValue(roomId, out var room))
