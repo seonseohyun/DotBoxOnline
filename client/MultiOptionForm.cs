@@ -249,8 +249,14 @@ namespace DotsAndBoxes
             }
             try
             {
+                // 플레이어 수 설정을 세션에 저장
+                if (cbPlayerCount.SelectedIndex == 0)     
+                    AppSession.MaxPlayers = 2;                     
+                else                               
+                    AppSession.MaxPlayers = 3;
+
                 // playerId + nickname 같이 보냄
-                var roomRes = await ServerApi.CreateRoomAsync(AppSession.PlayerId);
+                var roomRes = await ServerApi.CreateRoomAsync(AppSession.PlayerId, AppSession.MaxPlayers);
 
                 // 로비로 이동 (초대코드 전달)
                 MainForm main = (MainForm)this.ParentForm;
@@ -260,7 +266,8 @@ namespace DotsAndBoxes
                         AppSession.PlayerId,     
                         roomRes.inviteCode,     
                         roomRes.players,        // string[]
-                        roomRes.playerInfos     // PlayerInfo[]
+                        roomRes.playerInfos,    // PlayerInfo[]
+                        0                       //lastRound (새 방이므로 0)
                     )
                 );
             }
@@ -337,8 +344,11 @@ namespace DotsAndBoxes
             {
                 // 방 참가
                 var joinRes = await ServerApi.JoinRoomAsync(AppSession.PlayerId, code);
+                
+                // 참가한 사람도 이 방의 인원 수를 알고 있게 함
+                AppSession.MaxPlayers = joinRes.maxPlayers;  
 
-                // 2) 참가에 성공했으니 해당 roomId의 현재 상태를 조회해서 players 가져오기
+                // 2) 참가에 성공하면 해당 roomId의 현재 상태를 조회해서 players 가져오기
                 var state = await ServerApi.GetRoomStateAsync(joinRes.roomId);
 
                 var playersList = state.players != null
@@ -354,7 +364,8 @@ namespace DotsAndBoxes
                         AppSession.PlayerId,     // 내 playerId
                         joinRes.inviteCode,      // 초대 코드
                         state.players,        // string[]
-                        infos     // PlayerInfo[]
+                        infos,     // PlayerInfo[]
+                        0          //lastRound (초기 입장은 0)
                     )
                 );
             }

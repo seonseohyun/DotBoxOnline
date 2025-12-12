@@ -14,6 +14,7 @@ namespace DotsAndBoxes
         public static string PlayerId { get; set; }
         public static string PlayerName { get; set; }
         public static DateTime? ConnectedAt { get; set; }
+        public static int MaxPlayers { get; set; }   // 옵션창에서 인원수 선택시
     }
 
     public partial class HomeForm : Form

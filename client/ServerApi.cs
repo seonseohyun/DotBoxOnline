@@ -56,12 +56,10 @@ namespace DotsAndBoxes
         public string inviteCode { get; set; }
         public string[] players { get; set; }
         public bool isFull { get; set; }
-        // ★ 게임 시작 여부 확인용 (게임 전에는 null, 시작되면 현재 턴 playerId)
-        public string currentTurn { get; set; }
-
+        public string currentTurn { get; set; }// 게임 시작 여부 확인
         public PlayerInfo[] playerInfos { get; set; }
-        // /room/state에서 내려오는 playersInfos용
-        public PlayerInfo[] playersInfos { get; set; }
+        public PlayerInfo[] playersInfos { get; set; }// /room/state에서 내려오는 playersInfos용
+        public int gameRound { get; set; }
     }
 
     // /game/start 응답 DTO
@@ -88,9 +86,7 @@ namespace DotsAndBoxes
         public PlayerInfo[] playerInfos { get; set; }
     }
 
-    // ============================
-    // [멀티추가] 서버 프로토콜 DTO
-    // ============================
+    // /choice 프로토콜 DTO
     public class ChoiceRequest
     {
         public string roomId { get; set; }
@@ -123,6 +119,8 @@ namespace DotsAndBoxes
         public string currentTurnPlayerId { get; set; }
     }
 
+
+    // /draw 이벤트/응답 DTO
     public class DrawEvent
     {
         public long seq { get; set; }
@@ -136,6 +134,7 @@ namespace DotsAndBoxes
     public class DrawResponse
     {
         public string roomId { get; set; }
+        public int gameRound { get; set; }
         public List<DrawEvent> events { get; set; }
         public long lastSeq { get; set; }
     }
@@ -152,7 +151,6 @@ namespace DotsAndBoxes
         };
 
         /// /connect 호출해서 플레이어 세션 발급
-        /// 실패 시 Exception(error 메시지) 던짐
         public static async Task<ConnectResponse> ConnectAsync(string nickname)
         {
             var requestObj = new
@@ -199,11 +197,12 @@ namespace DotsAndBoxes
         }
 
         /// /room/create : 방 생성
-        public static async Task<CreateRoomResponse> CreateRoomAsync(string playerId)
+        public static async Task<CreateRoomResponse> CreateRoomAsync(string playerId, int maxPlayers)
         {
             var requestObj = new
             {
-                playerId = playerId
+                playerId = playerId,
+                maxPlayers = maxPlayers // 서버로 인원 수 전송
             };
 
             string json = JsonConvert.SerializeObject(requestObj);
@@ -378,7 +377,7 @@ namespace DotsAndBoxes
             }
         }
 
-        // [멀티추가] 선 긋기 요청: POST /choice
+        // POST /choice : 선 긋기 요청
         public static async Task<ChoiceResponse> SendChoiceAsync(ChoiceRequest req)
         {
             string json = JsonConvert.SerializeObject(req);
@@ -395,7 +394,7 @@ namespace DotsAndBoxes
             return result;
         }
 
-        // [멀티추가] 선 이벤트 조회: GET /draw
+        // GET /draw : 선 이벤트 조회
         public static async Task<DrawResponse> GetDrawEventsAsync(string roomId, long afterSeq)
         {
             string url = $"/draw?roomId={roomId}&afterSeq={afterSeq}";

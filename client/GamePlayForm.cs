@@ -3,6 +3,8 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.Collections.Generic;
 using System.Threading;
+using System.Threading.Tasks;
+using System.Text;
 
 namespace DotsAndBoxes
 {
@@ -33,8 +35,10 @@ namespace DotsAndBoxes
         // 현재 턴인 플레이어 인덱스 (0, 1, 2)
         private int _currentPlayerIndex;
 
-        // [멀티추가] playerId 리스트 (서버 ID)
+        // 멀티 모드용 playerId 리스트 (서버 ID)
         private List<string> _playerIds = new List<string>(); // playerId (p1, p2, ...)저장용
+
+        private int _maxPlayers = 3; // 기본값 3
 
         private bool isInitialized = false;
 
@@ -46,7 +50,7 @@ namespace DotsAndBoxes
         private bool isAIMode = false;
         private Random rand = new Random();
 
-        // [멀티추가] 모드 구분 & 멀티용 필드
+        // 모드 구분 & 멀티용 필드
         private enum GameMode
         {
             Single,      // 싱글 (Player vs AI)
@@ -55,7 +59,7 @@ namespace DotsAndBoxes
 
         private GameMode _mode = GameMode.Single;   // 기본은 싱글
 
-        // 멀티용: 방/플레이어 정보
+        // 멀티 모드용 : 방/플레이어 정보
         private string _roomId;              
         private string _myPlayerId;            
 
@@ -64,6 +68,9 @@ namespace DotsAndBoxes
         private System.Windows.Forms.Timer _drawTimer;
 
         private bool _gameEnded = false;   // 게임끝 결과 처리
+
+        // GamePlayForm이 담당하는 라운드 번호
+        private int _gameRound;
 
         // 싱글모드 생성자
         public GamePlayForm(int boardSize, AIDifficulty difficulty)
@@ -91,7 +98,7 @@ namespace DotsAndBoxes
         }
 
         // 멀티모드 생성자
-        public GamePlayForm(int boardSize, List<string> players, List<string> playerIds, string roomId, string myPlayerId)
+        public GamePlayForm(int boardSize, List<string> players, List<string> playerIds, string roomId, string myPlayerId, int gameRound)
         {
             _mode = GameMode.MultiOnline;   // [멀티추가] 멀티 모드
 
@@ -100,7 +107,7 @@ namespace DotsAndBoxes
             currentPlayer = PlayerType.Player1;
 
             _players = players ?? new List<string>();
-            _playerIds = playerIds ?? new List<string>();   // [멀티추가]
+            _playerIds = playerIds ?? new List<string>();
 
             // 실제 플레이 인원 = 방에 들어온 사람 수 (최대 3명)
             _activePlayerCount = Math.Min(_players.Count, 3);
@@ -108,12 +115,19 @@ namespace DotsAndBoxes
             // 멀티는 0번 플레이어부터 시작
             _currentPlayerIndex = 0;
 
-            // [멀티추가] 방/내 플레이어 ID 저장
+            // 방/내 플레이어 ID 저장
             _roomId = roomId;
             _myPlayerId = myPlayerId;
 
+            // 이번 게임 라운드 번호 저장
+            _gameRound = gameRound;
+
+            _maxPlayers = AppSession.MaxPlayers;
+            _activePlayerCount = Math.Min(_players.Count, 3); // 실제 플레이 인원
+
             NormalizePlayers();   // 내부적으로 3칸에 맞춰줌
             InitializeGame();
+            ApplyMaxPlayersToScoreUI();
         }
 
         private void InitializeGame()
@@ -173,6 +187,28 @@ namespace DotsAndBoxes
             while (_players.Count < 3)
             {
                 _players.Add("대기중");
+            }
+        }
+        
+        // 2P/3P 설정에 따라 상단 UI 조정
+        private void ApplyMaxPlayersToScoreUI() 
+        {
+            if (_maxPlayers == 2)
+            {
+                // 2인 모드 → Player3 슬롯 비활성화 
+                if (lblPlayer3Score != null)
+                {
+                    lblPlayer3Score.Text = "Disabled (2P mode)"; 
+                    lblPlayer3Score.ForeColor = Color.Gray; 
+                }
+            }
+            else
+            {
+                // 3인 모드 → 원래 색으로 복구 
+                if (lblPlayer3Score != null) 
+                {
+                    lblPlayer3Score.ForeColor = Color.Black;
+                }
             }
         }
 
@@ -304,7 +340,7 @@ namespace DotsAndBoxes
                     g.FillEllipse(dotBrush, dots[r, c].X - 4, dots[r, c].Y - 4, 8, 8);
         }
 
-        // [멀티수정] MouseClick - 모드별 분기
+        // 멀티 모드용 MouseClick - 모드별 분기
         private void GamePlayForm_MouseClick(object sender, MouseEventArgs e)
         {
             if (_mode == GameMode.Single)
@@ -344,7 +380,7 @@ namespace DotsAndBoxes
             if (isAIMode && currentPlayer == PlayerType.AI) AIMoveLoop();
         }
 
-        // [멀티추가] 멀티 모드용 클릭 처리 (/choice)
+        // 멀티 모드용 클릭 처리 (/choice)
         private async System.Threading.Tasks.Task HandleMouseClick_MultiAsync(MouseEventArgs e)
         {
             // 1) 어느 선인지 찾기 (기존 로직 재사용)
@@ -414,7 +450,7 @@ namespace DotsAndBoxes
             CheckGameEnd();
         }
 
-        // [멀티추가] playerId -> 인덱스(0,1,2) 매핑 헬퍼
+        // 멀티 모드용 playerId -> 인덱스(0,1,2) 매핑 헬퍼
         private int GetPlayerIndexById(string playerId)
         {
             if (_playerIds == null || _playerIds.Count == 0)
@@ -651,7 +687,8 @@ namespace DotsAndBoxes
                 _players,       // 플레이어 이름 리스트
                 aiDifficulty,    // AI 난이도 (멀티면 무시)
                 _roomId,
-                _myPlayerId
+                _myPlayerId,
+                _gameRound
             );
 
             // 4) 승자 판정 (2명/3명 모두 공용)
@@ -684,7 +721,18 @@ namespace DotsAndBoxes
                 resultForm.SetResultText($"{winnerName} Win!");
             }
 
-            // 5) 메인폼에 결과창 로드
+            // 점수 요약 문자열 만들어서 결과창에 넘김  
+            var sb = new StringBuilder();                        
+            for (int i = 0; i < _activePlayerCount; i++)         
+            {                                                    
+                if (i > 0) sb.Append("   |   ");                 
+                string name = _players[i];                       
+                int score = scores[i];                          
+                sb.Append($"{name}: {score}");                   
+            }                                                  
+            resultForm.SetScoreSummary(sb.ToString());           
+
+            // 5) 결과창 로드
             main.LoadChildForm(resultForm);
         }
 
@@ -713,7 +761,7 @@ namespace DotsAndBoxes
             }
         }
 
-        // [멀티추가] /draw 폴링용 타이머
+        // /draw 폴링용 타이머
         private void StartDrawPolling()
         {
             _drawTimer = new System.Windows.Forms.Timer();
@@ -725,8 +773,8 @@ namespace DotsAndBoxes
             _drawTimer.Start();
         }
 
-        // [멀티추가] /draw 호출해서 새로운 이벤트만 반영
-        private async System.Threading.Tasks.Task PollDrawEventsAsync()
+        // /draw 호출해서 새로운 이벤트만 반영
+        private async Task PollDrawEventsAsync()
         {
             if (string.IsNullOrEmpty(_roomId)) return;
 
@@ -737,10 +785,11 @@ namespace DotsAndBoxes
             }
             catch
             {
-                // 조용히 무시 (네트워크 흔들릴 수 있으니)
-                return;
+                return; // 조용히 무시 (네트워크 흔들릴 수 있으니)
             }
 
+            if (res == null || res.gameRound != _gameRound) //이전 게임의 이벤트
+                return;
             if (res == null || res.events == null || res.events.Count == 0)
                 return;
 
