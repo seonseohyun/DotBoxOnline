@@ -144,12 +144,12 @@ app.MapGet("/players", (ILogger<Program> logger) =>
 // ====================================================================
 // 4) 방 생성, 참가(/room/create, /room/join)
 // ====================================================================
-
+// 방 생성시 맵 크기를 추가로 받는다. -> boardIndex 0,1,2 (5,6,7)
 app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
 {
-    //[Debug] 방 생성 요청 로그
-    logger.LogInformation("[RoomCreate] request playerId={PlayerId}, maxPlayers={MaxPlayers}",
-        req.PlayerId, req.MaxPlayers);
+    //[Debug] 방 생성 요청 로그 (+ boardIndex)
+        logger.LogInformation("[RoomCreate] request playerId={PlayerId}, maxPlayers={MaxPlayers}, boardIndex={BoardIndex}",
+            req.PlayerId, req.MaxPlayers, req.BoardIndex);
 
     // 1) playerId 존재하는지 확인
     if (!SessionStore.Players.ContainsKey(req.PlayerId))
@@ -166,14 +166,21 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
         return Results.BadRequest(new { error = "Invalid maxPlayers (allowed: 2 or 3)" });
     }
 
+    // boardIndex 검증 (TryValidateBoardIndex 사용)
+    if (!TryValidateBoardIndex(req.BoardIndex, out var boardIndex, out var boardErr))
+    {
+        logger.LogWarning("[RoomCreate] {Error}, boardIndex={BoardIndex}", boardErr, req.BoardIndex);
+        return Results.BadRequest(new { error = boardErr });
+    }
+
     // 2) 새 방 객체 생성
-    var room = new GameRoom
+    var room = new GameRoom(boardIndex)
     {
         RoomId = Guid.NewGuid().ToString("N"),       // 고유한 방 ID 생성
         InviteCode = InviteCodeGenerator.Generate(6),// 6자리 초대코드 생성
         HostId = req.PlayerId,                       // [NEW] 방장 = 방 만든 사람
 
-        // ✅ 핵심: 요청값으로 방 정원 저장 (2인/3인 방 지원)
+        // 핵심: 요청값으로 방 정원 저장 (2인/3인 방 지원)
         MaxPlayers = maxPlayers
     };
 
@@ -187,8 +194,9 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
     RoomStore.Rooms[room.RoomId] = room;
 
     //[Debug] 생성된 방 정보 로그
-    logger.LogInformation("[DONE!! - RoomCreate] roomId={RoomId}, hostId={HostId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}",
-        room.RoomId, room.HostId, room.InviteCode, string.Join(",", room.Players), room.MaxPlayers);
+    logger.LogInformation(
+        "[DONE!! - RoomCreate] roomId={RoomId}, hostId={HostId}, inviteCode={InviteCode}, players={Players}, maxPlayers={MaxPlayers}, boardIndex={BoardIndex}, dotCount={DotCount}",
+        room.RoomId, room.HostId, room.InviteCode, string.Join(",", room.Players), room.MaxPlayers, room.BoardIndex, room.DotCount);
 
     var playerInfos = PlayerMapper.ToPlayerInfos(room.Players);
 
@@ -202,7 +210,8 @@ app.MapPost("/room/create", (CreateRoomRequest req, ILogger<Program> logger) =>
         // room 상태 기준으로 내려줌
         maxPlayers = room.MaxPlayers,
         isFull = room.IsFull,
-        currentTurn = room.CurrentTurn //null 반환
+        currentTurn = room.CurrentTurn, //null 반환,
+        boardIndex = room.BoardIndex, //추가: 보드 크기 선택용
     });
 });
 
@@ -408,6 +417,7 @@ app.MapGet("/room/state/{roomId}", (string roomId, ILogger<Program> logger) =>
         maxPlayers = room.MaxPlayers,
         isFull = room.Players.Count >= room.MaxPlayers,
         currentTurn = room.CurrentTurn,
+        room.BoardIndex, //추가: 보드 크기 선택용
         gameRound = room.gameRound // 요거 추가됨 -> 클라에서 쓸 라운드 번호 보내주기
     });
 });
@@ -453,7 +463,7 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
     room.gameRound++;        // 0 -> 1, 1 -> 2, ...
     room.Events.Clear();     // 이전 라운드 이벤트 로그 비우기
     room.NextSeq = 1;        // 시퀀스 번호도 초기화
-    room.InitBoard(dotCount: 5); // 5x5 점 -> 4x4 박스 보드 초기화
+    room.InitBoard(); // 선택한 크기로 자동 반영 되도록 수정
 
     // 6) 턴 순서 결정: 방장 먼저, 그 다음 입장 순서 - 기존 로직 유지할게요~
     var ordered = room.Players
@@ -494,7 +504,7 @@ app.MapPost("/game/start", (GameStartRequest req, ILogger<Program> logger) =>
         turnOrderInfos,
 
         firstPlayer = room.TurnOrder[0],
-        CurrentTurn = room.CurrentTurn,
+        currentTurn = room.CurrentTurn,
 
         gameRound = room.gameRound
     });
@@ -628,7 +638,7 @@ app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
             isHorizontal = e.IsHorizontal,
             row = e.Row,
             col = e.Col,
-            // ✅ 서버가 판정한 "이번 선으로 완성된 박스"를 같이 내려줌
+            // 서버가 판정한 "이번 선으로 완성된 박스"를 같이 내려줌
             // 클라는 이 좌표를 받아서 박스 색칠/점수 반영만 하면 됨
             madeBoxes = (e.MadeBoxes ?? new List<BoxDto>())
             .Select(b => new { row = b.Row, col = b.Col })
@@ -637,10 +647,6 @@ app.MapGet("/draw", (string roomId, long? afterSeq, ILogger<Program> logger) =>
         .ToList();
 
     var lastSeq = events.Count > 0 ? events[^1].seq : startSeq;
-
-    // logger.LogInformation(
-    //     "[Draw] response roomId={RoomId}, gameRound ={gameRound} count={Count}, lastSeq={LastSeq}",
-    //     roomId, room.gameRound, events.Count, lastSeq);
 
     return Results.Ok(new
     {
@@ -763,6 +769,19 @@ static string GetNextTurn(GameRoom room, string currentPlayerId)
     return room.TurnOrder[(idx + 1) % room.TurnOrder.Count];
 }
 
+static bool TryValidateBoardIndex(int? boardIndexRaw, out int boardIndex, out string error)
+{
+    boardIndex = boardIndexRaw ?? 0; // 기본 5x5
+    if (boardIndex is 0 or 1 or 2)
+    {
+        error = "";
+        return true;
+    }
+
+    error = "Invalid boardIndex (allowed: 0 or 1 or 2)";
+    return false;
+}
+
 
 // ====================================================================
 //                              타입 정의 구역
@@ -867,7 +886,30 @@ public class GameRoom
     public int gameRound { get; set; } = 0; //게임 라운드 카운터
 
     // ===== 보드 상태(박스 체크) =====
+    public int BoardIndex { get; private set; } = 0; //추가: 보드 크기 선택용 기본 5*5
     public int DotCount { get; private set; } = 0;
+    public GameRoom(int boardIndex)
+    {
+        if (boardIndex is not (0 or 1 or 2))
+            boardIndex = 0;
+
+        BoardIndex = boardIndex;
+        DotCount = boardIndex switch
+        {
+            0 => 5,
+            1 => 6,
+            2 => 7,
+            _ => 5
+        };
+    }
+    public void InitBoard()
+    {
+        var n = DotCount;
+
+        HLines = new bool[n, n - 1];
+        VLines = new bool[n - 1, n];
+        BoxOwner = new string?[n - 1, n - 1];
+    }
 
     // HLines[r,c] : (r,c) ~ (r,c+1) 가로선 (r:0..DotCount-1, c:0..DotCount-2)
     public bool[,]? HLines { get; private set; }
@@ -877,14 +919,7 @@ public class GameRoom
 
     // BoxOwner[br,bc] : 박스 주인 playerId (br:0..DotCount-2, bc:0..DotCount-2)
     public string?[,]? BoxOwner { get; private set; }
-    public void InitBoard(int dotCount)
-        {
-            DotCount = dotCount;
 
-            HLines = new bool[dotCount, dotCount - 1];
-            VLines = new bool[dotCount - 1, dotCount];
-            BoxOwner = new string?[dotCount - 1, dotCount - 1];
-        }
 }
 
 // (/connect 요청 Body 모델)
@@ -898,6 +933,7 @@ public class CreateRoomRequest
 {
     public string PlayerId { get; set; } = default!;
     public int? MaxPlayers { get; set; } 
+    public int? BoardIndex { get; set; } //추가: 보드 크기 선택용
 }
 
 // (/room/join 요청 Body 모델)
