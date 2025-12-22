@@ -83,6 +83,12 @@
     <Compile Include="MultiOptionForm.Designer.cs">
       <DependentUpon>MultiOptionForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="OutlinedTextControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="RoundedPanel.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="ServerApi.cs" />
     <Compile Include="SingleOptionForm.cs">
       <SubType>Form</SubType>
@@ -92,6 +98,7 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Theme.cs" />
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>

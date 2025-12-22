@@ -12,12 +12,6 @@ namespace DotsAndBoxes
 {
     public partial class MultiLobbyForm : Form
     {
-        private TextBox txtInviteCode;
-        private Label lblPlayer1;
-        private Label lblPlayer2;
-        private Label lblPlayer3;
-        private Button btnStart;
-        private Button btnExit;
         private string _roomId;      // 방 ID
         private string _myPlayerId;  // 내 playerId
         private int _maxPlayers;
@@ -31,7 +25,9 @@ namespace DotsAndBoxes
         public MultiLobbyForm()
         {
             InitializeComponent();
-            BuildUI();
+            this.DoubleBuffered = true;
+            ApplyTheme();
+
         }
 
         // 방 정보 + 내 playerId + 초대코드 + players + playerInfos 받는 생성자
@@ -86,92 +82,73 @@ namespace DotsAndBoxes
             UpdatePlayers(_currentPlayers); // 라벨 업데이트 (닉네임 기준)
             StartLobbyTimer(); // 로비 상태 주기적으로 체크
         }
-
-        private void BuildUI()
+        // 테마/스타일 적용
+        private void ApplyTheme()
         {
-            this.Text = "Multi Lobby";
-            this.BackColor = Color.White;
-            this.Size = new Size(500, 600);
+            Theme.ApplyForm(this);
+            Theme.ApplyCard(pnlCard);
 
-            // ===== 제목 =====
-            var lblTitle = new Label();
-            lblTitle.Text = "Multi Play Lobby";
-            lblTitle.Font = new Font("맑은 고딕", 18, FontStyle.Bold);
-            lblTitle.AutoSize = true;
-            lblTitle.Location = new Point(140, 40);
-            this.Controls.Add(lblTitle);
+            // 버튼
+            Theme.ApplyButton(btnStart);
+            Theme.ApplyButton(btnExit);
+            Theme.ApplyButton(btnBack);
 
-            // ===== 초대 코드 영역 =====
-            var lblCodeTitle = new Label();
-            lblCodeTitle.Text = "Invite Code";
-            lblCodeTitle.Font = new Font("맑은 고딕", 12, FontStyle.Regular);
-            lblCodeTitle.AutoSize = true;
-            lblCodeTitle.Location = new Point(60, 120);
-            this.Controls.Add(lblCodeTitle);
+            // 타이틀
+            lblTitle.Text = "MULTI PLAY LOBBY";
+            lblTitle.Font = new Font("Segoe UI", 20f, FontStyle.Bold);
+            lblTitle.ForeColor = Theme.C_TEXT;
+            lblTitle.OutlineColor = Color.FromArgb(170, 170, 170);
+            lblTitle.OutlineThickness = 1.3f;
+            lblTitle.LetterSpacing = 2.5f;
+            lblTitle.TextAlign = ContentAlignment.MiddleCenter;
 
-            txtInviteCode = new TextBox();
-            txtInviteCode.Location = new Point(60, 150);
-            txtInviteCode.Width = 360;
-            txtInviteCode.ReadOnly = true;
-            txtInviteCode.TextAlign = HorizontalAlignment.Center;
-            this.Controls.Add(txtInviteCode);
+            // 섹션 라벨
+            var sectionFont = new Font("Segoe UI", 12.5f, FontStyle.Bold);
+            lblInviteCodeTitle.Font = sectionFont;
+            lblPlayersTitle.Font = sectionFont;
 
-            // ===== 플레이어 슬롯 영역 =====
-            var lblPlayersTitle = new Label();
-            lblPlayersTitle.Text = "Players";
-            lblPlayersTitle.Font = new Font("맑은 고딕", 12, FontStyle.Regular);
-            lblPlayersTitle.AutoSize = true;
-            lblPlayersTitle.Location = new Point(60, 210);
-            this.Controls.Add(lblPlayersTitle);
+            lblInviteCodeTitle.ForeColor = Theme.C_TEXT;
+            lblPlayersTitle.ForeColor = Theme.C_TEXT;
 
-            // Player1
-            lblPlayer1 = new Label();
+            // 초대코드 텍스트박스
+            txtInviteCode.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+            txtInviteCode.BackColor = Theme.C_CARD_BG;
+            txtInviteCode.ForeColor = Theme.C_TEXT;
+
+            // 플레이어 슬롯 라벨
+            var slotFont = new Font("Segoe UI", 12f, FontStyle.Bold);
+            lblPlayer1.Font = slotFont;
+            lblPlayer2.Font = slotFont;
+            lblPlayer3.Font = slotFont;
+
             lblPlayer1.BorderStyle = BorderStyle.FixedSingle;
-            lblPlayer1.Text = "Player1 (Host)";
-            lblPlayer1.TextAlign = ContentAlignment.MiddleLeft;
-            lblPlayer1.Font = new Font("맑은 고딕", 11);
-            lblPlayer1.Size = new Size(360, 35);
-            lblPlayer1.Location = new Point(60, 240);
-            this.Controls.Add(lblPlayer1);
-
-            // Player2
-            lblPlayer2 = new Label();
             lblPlayer2.BorderStyle = BorderStyle.FixedSingle;
-            lblPlayer2.Text = "Waiting for Player2...";
-            lblPlayer2.TextAlign = ContentAlignment.MiddleLeft;
-            lblPlayer2.Font = new Font("맑은 고딕", 11);
-            lblPlayer2.Size = new Size(360, 35);
-            lblPlayer2.Location = new Point(60, 280);
-            this.Controls.Add(lblPlayer2);
-
-            // Player3
-            lblPlayer3 = new Label();
             lblPlayer3.BorderStyle = BorderStyle.FixedSingle;
-            lblPlayer3.Text = "Waiting for Player3...";
-            lblPlayer3.TextAlign = ContentAlignment.MiddleLeft;
-            lblPlayer3.Font = new Font("맑은 고딕", 11);
-            lblPlayer3.Size = new Size(360, 35);
-            lblPlayer3.Location = new Point(60, 320);
-            this.Controls.Add(lblPlayer3);
 
-            // ===== Start 버튼 =====
-            btnStart = new Button();
-            btnStart.Text = "Start";
-            btnStart.Font = new Font("맑은 고딕", 14, FontStyle.Bold);
-            btnStart.Size = new Size(220, 60);
-            btnStart.Location = new Point(140, 420);
-            btnStart.Click += BtnStart_Click;
-            this.Controls.Add(btnStart);
+            lblPlayer1.BackColor = Theme.C_CARD_BG;
+            lblPlayer2.BackColor = Theme.C_CARD_BG;
+            lblPlayer3.BackColor = Theme.C_CARD_BG;
 
-            // ===== Exit 버튼 =====
-            btnExit = new Button();
-            btnExit.Text = "나가기";
-            btnExit.Font = new Font("맑은 고딕", 12, FontStyle.Bold);
-            btnExit.Size = new Size(220, 50);
-            btnExit.Location = new Point(140, 500);
-            btnExit.Click += BtnExit_Click;
-            this.Controls.Add(btnExit);
+            lblPlayer1.ForeColor = Theme.C_TEXT;
+            lblPlayer2.ForeColor = Theme.C_TEXT;
+            lblPlayer3.ForeColor = Theme.C_TEXT;
         }
+
+        // [추가] 뒤로가기 버튼 (로비에서 홈으로)
+        private void BtnBack_Click(object sender, EventArgs e)
+        {
+            // 타이머 정리
+            if (_lobbyTimer != null)
+            {
+                _lobbyTimer.Stop();
+                _lobbyTimer.Dispose();
+                _lobbyTimer = null;
+            }
+
+            MainForm main = (MainForm)this.ParentForm;
+            main.LoadChildForm(new HomeForm());
+        }
+
 
         // 타이머 세팅
         private void StartLobbyTimer()
@@ -210,8 +187,9 @@ namespace DotsAndBoxes
             if (_maxPlayers == 2)                                             
             {
                 // 2인 모드에서는 3번 슬롯 비활성/회색 처리                                     
-                lblPlayer3.Text = "Disabled (2P mode)";                 
-                lblPlayer3.ForeColor = Color.Gray;                        
+                lblPlayer3.Text = " X ";
+                lblPlayer3.ForeColor = Color.Gray;
+                
             }
 
             // 2) 방장 여부 판단 (players[0] = Host)
@@ -223,7 +201,7 @@ namespace DotsAndBoxes
             // 4) 방장 표시 (Player1 라벨 배경색만 변경)
             if (_currentPlayerIds.Count > 0)
             {
-                lblPlayer1.BackColor = Color.LightYellow;
+                lblPlayer1.BackColor = Color.LemonChiffon;
                 lblPlayer1.Font = new Font(lblPlayer1.Font, FontStyle.Bold);
             }
             else

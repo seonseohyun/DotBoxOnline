@@ -2,6 +2,7 @@
 using System;
 using System.Drawing;
 using System.Windows.Forms;
+using static DotsAndBoxes.GamePlayForm;
 
 namespace DotsAndBoxes
 {
@@ -10,73 +11,45 @@ namespace DotsAndBoxes
         public SingleOptionForm()
         {
             InitializeComponent();
-            BuildUI();
+            this.DoubleBuffered = true;
+            ApplyTheme();
         }
-
-        private ComboBox cbBoardSize;
-        private ComboBox cbDifficulty;
-        private Button btnBack;
-
-        private void BuildUI()
+        private void ApplyTheme()
         {
-            this.Text = "Single Play Options";
-            this.Size = new Size(500, 700);
+            // 폼 기본
+            Theme.ApplyForm(this);
 
-            // ===== 뒤로가기 버튼 =====
-            btnBack = new Button();
-            btnBack.Text = "◀ Back";
-            btnBack.Size = new Size(80, 30);
-            btnBack.Location = new Point(10, 10);
-            btnBack.Click += BtnBack_Click;
-            this.Controls.Add(btnBack);
-            btnBack.BringToFront();
+            // 카드
+            Theme.ApplyCard(pnlCard);
 
-            // ===== 제목 =====
-            Label lblTitle = new Label();
-            lblTitle.Text = "Single Play Options";
-            lblTitle.AutoSize = true;
-            lblTitle.Location = new Point(100, 60);
-            lblTitle.Font = new Font("Arial", 20, FontStyle.Bold);
-            this.Controls.Add(lblTitle);
+            // 버튼
+            Theme.ApplyButton(btnBack);
+            Theme.ApplyButton(btnStart);
 
-            // ===== 맵 크기 설정 =====
-            Label lblBoard = new Label();
-            lblBoard.Text = "Board Size";
-            lblBoard.Location = new Point(60, 150);
-            lblBoard.Font = new Font("Arial", 14);
-            this.Controls.Add(lblBoard);
+            // ===== 폰트 규칙 =====
+            var labelFont = new Font("Segoe UI", 12.5f, FontStyle.Bold);
+            var inputFont = new Font("Segoe UI", 12f, FontStyle.Bold);
 
-            cbBoardSize = new ComboBox();
-            cbBoardSize.Location = new Point(200, 150);
-            cbBoardSize.Items.Add("5 x 5");
-            cbBoardSize.Items.Add("6 x 6");
-            cbBoardSize.Items.Add("7 x 7");
-            cbBoardSize.SelectedIndex = 0;
-            this.Controls.Add(cbBoardSize);
+            // 라벨
+            lblBoardSizeTitle.Font = labelFont;
+            lblDifficultyTitle.Font = labelFont;
+            lblBoardSizeTitle.ForeColor = Theme.C_TEXT;
+            lblDifficultyTitle.ForeColor = Theme.C_TEXT;
 
-            // ===== 난이도 설정 =====
-            Label lblDiff = new Label();
-            lblDiff.Text = "Difficulty";
-            lblDiff.Location = new Point(60, 230);
-            lblDiff.Font = new Font("Arial", 14);
-            this.Controls.Add(lblDiff);
+            // 콤보박스
+            cbBoardSize.Font = inputFont;
+            cbDifficulty.Font = inputFont;
+            cbBoardSize.BackColor = Theme.C_CARD_BG;
+            cbDifficulty.BackColor = Theme.C_CARD_BG;
 
-            cbDifficulty = new ComboBox();
-            cbDifficulty.Location = new Point(200, 230);
-            cbDifficulty.Items.Add("Easy");
-            cbDifficulty.Items.Add("Normal");
-            cbDifficulty.Items.Add("Hard");
-            cbDifficulty.SelectedIndex = 1;
-            this.Controls.Add(cbDifficulty);
-
-            // ===== 싱글 게임시작 버튼 =====
-            Button btnStart = new Button();
-            btnStart.Text = "Start Game";
-            btnStart.Font = new Font("Arial", 14);
-            btnStart.Size = new Size(200, 50);
-            btnStart.Location = new Point(150, 400);
-            btnStart.Click += BtnStartGame_Click;
-            this.Controls.Add(btnStart);
+            // 타이틀 (OutlinedTextControl)
+            lblTitle.Text = "SINGLE PLAY OPTIONS";
+            lblTitle.Font = new Font("Segoe UI", 20f, FontStyle.Bold);
+            lblTitle.ForeColor = Theme.C_TEXT;
+            lblTitle.OutlineColor = Color.FromArgb(170, 170, 170);
+            lblTitle.OutlineThickness = 1.3f;
+            lblTitle.LetterSpacing = 2.5f;
+            lblTitle.TextAlign = ContentAlignment.MiddleCenter;
         }
 
         private void BtnStartGame_Click(object sender, EventArgs e)

@@ -15,152 +15,106 @@ namespace DotsAndBoxes
         public MultiOptionForm()
         {
             InitializeComponent();
-            BuildUI();
+            this.DoubleBuffered = true;
+            ApplyTheme();
+            SetupPlaceholders();
         }
-
-        private ComboBox cbBoardSize;
-        private ComboBox cbPlayerCount;
-        private TextBox txtRoomCode;
-        private Button btnBack;
-        private TextBox txtNickname;
         private bool _nicknameConfirmed = false;
 
-        private void BuildUI()
+
+        // 테마 적용
+        private void ApplyTheme()
         {
-            this.Text = "Multiplay Options";
-            this.Size = new System.Drawing.Size(500, 650);
+            // 폼 기본
+            Theme.ApplyForm(this);
 
-            // 뒤로가기 버튼
-            btnBack = new Button();
-            btnBack.Text = "◀ Back";            // 원하는 텍스트로 변경 가능
-            btnBack.Size = new Size(80, 30);
-            btnBack.Location = new Point(10, 10);  // 좌측 상단
-            btnBack.Click += BtnBack_Click;
-            this.Controls.Add(btnBack);
-            btnBack.BringToFront();
+            // 카드
+            Theme.ApplyCard(pnlCard);
 
-            // 제목
-            Label lblTitle = new Label();
-            lblTitle.Text = "Multiplayer Options";
-            lblTitle.AutoSize = true;
-            lblTitle.Location = new Point(100, 60);
-            lblTitle.Font = new System.Drawing.Font("Arial", 20, System.Drawing.FontStyle.Bold);
-            lblTitle.TextAlign = System.Drawing.ContentAlignment.MiddleCenter;
-            this.Controls.Add(lblTitle);
+            // 버튼들
+            Theme.ApplyButton(btnBack);
+            Theme.ApplyButton(btnCreateRoom);
+            Theme.ApplyButton(btnJoinRoom);
+            Theme.ApplyButton(btnNicknameOk);
 
-            // 맵 사이즈 선택 (Board Size)
-            Label lblBoardSize = new Label();
-            lblBoardSize.Text = "Board Size";
-            lblBoardSize.Location = new System.Drawing.Point(60, 150);
-            lblBoardSize.Font = new System.Drawing.Font("Arial", 14);
-            lblBoardSize.AutoSize = true;
-            this.Controls.Add(lblBoardSize);
+            // 콤보박스/텍스트박스는 Theme에 넣지 말고 여기서 최소 세팅
+            cbBoardSize.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            cbPlayerCount.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
 
-            cbBoardSize = new ComboBox();
-            cbBoardSize.Location = new System.Drawing.Point(200, 150);
-            cbBoardSize.Items.Add("5 x 5");
-            cbBoardSize.Items.Add("6 x 6");
-            cbBoardSize.Items.Add("7 x 7");
-            cbBoardSize.SelectedIndex = 0;
-            this.Controls.Add(cbBoardSize);
+            txtNickname.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
+            txtRoomCode.Font = new Font("Segoe UI", 11f, FontStyle.Bold);
 
-            // 플레이어 수 설정 (Player Count)
-            Label lblPlayerCount = new Label();
-            lblPlayerCount.Text = "Player Count";
-            lblPlayerCount.Location = new System.Drawing.Point(60, 210);
-            lblPlayerCount.Font = new System.Drawing.Font("Arial", 14);
-            lblPlayerCount.AutoSize = true;
-            this.Controls.Add(lblPlayerCount);
+            cbBoardSize.BackColor = Theme.C_CARD_BG;
+            cbPlayerCount.BackColor = Theme.C_CARD_BG;
 
-            cbPlayerCount = new ComboBox();
-            cbPlayerCount.Location = new System.Drawing.Point(200, 210);
-            cbPlayerCount.Items.Add("2 Players");
-            cbPlayerCount.Items.Add("3 Players");
-            cbPlayerCount.SelectedIndex = 0;
-            this.Controls.Add(cbPlayerCount);
+            txtNickname.BackColor = Theme.C_CARD_BG;
+            txtRoomCode.BackColor = Theme.C_CARD_BG;
 
-            // 방 만들기 버튼 (Creat Room)
-            Button btnCreateRoom = new Button();
-            btnCreateRoom.Text = "Create Room";
-            btnCreateRoom.Font = new System.Drawing.Font("Arial", 14);
-            btnCreateRoom.Size = new System.Drawing.Size(200, 50);
-            btnCreateRoom.Location = new System.Drawing.Point(150, 478);
-            btnCreateRoom.Click += BtnCreateRoom_Click;
-            this.Controls.Add(btnCreateRoom);
+            // 타이틀 (OutlinedTextControl) - 화면 고유 연출이라 여기서 처리
+            lblTitle.Text = "MULTIPLAYER OPTIONS";
+            lblTitle.Font = new Font("Segoe UI", 20f, FontStyle.Bold);
+            lblTitle.ForeColor = Theme.C_TEXT;
+            lblTitle.OutlineColor = Color.FromArgb(170, 170, 170);
+            lblTitle.OutlineThickness = 1.3f;
+            lblTitle.LetterSpacing = 2.5f;
+            lblTitle.TextAlign = ContentAlignment.MiddleCenter;
 
+            // 라벨용 Bold 폰트 
+            var labelFont = new Font("Segoe UI", 13f, FontStyle.Bold);
 
-            // 초대코드 입력 및 방 참여 버튼 (Room code + Join button)
-            txtRoomCode = new TextBox();
-            txtRoomCode.Text = "Enter Room Code";
-            txtRoomCode.ForeColor = System.Drawing.Color.Gray;
-            txtRoomCode.Location = new System.Drawing.Point(60, 380);
-            txtRoomCode.Width = 220;
-            
-            // Placeholder 기능
-            txtRoomCode.GotFocus += (s, e) =>
-            {
-                if (txtRoomCode.ForeColor == System.Drawing.Color.Gray)
-                {
-                    txtRoomCode.Text = "";
-                    txtRoomCode.ForeColor = System.Drawing.Color.Black;
-                }
-            };
-            txtRoomCode.LostFocus += (s, e) =>
-            {
-                if (string.IsNullOrWhiteSpace(txtRoomCode.Text))
-                {
-                    txtRoomCode.Text = "Enter Room Code";
-                    txtRoomCode.ForeColor = System.Drawing.Color.Gray;
-                }
-            };
-            this.Controls.Add(txtRoomCode);
-
-            // 초대방 입장 버튼 (Join Room)
-            Button btnJoinRoom = new Button();
-            btnJoinRoom.Text = "Join Room";
-            btnJoinRoom.Font = new System.Drawing.Font("Arial", 11);
-            btnJoinRoom.Size = new System.Drawing.Size(150, 28);
-            btnJoinRoom.Location = new System.Drawing.Point(350, 378);
-            btnJoinRoom.Click += BtnJoinRoom_Click;
-            this.Controls.Add(btnJoinRoom);
-
-            // 닉네임 입력 (Nickname TextBox)
-            txtNickname = new TextBox();
-            txtNickname.Text = "Enter Nickname";
-            txtNickname.ForeColor = System.Drawing.Color.Gray;
-            txtNickname.Location = new System.Drawing.Point(60, 330);
-            txtNickname.Width = 220;
-
-            // Placeholder 기능 
-            txtNickname.GotFocus += (s, e) =>
-            {
-                if (txtNickname.ForeColor == System.Drawing.Color.Gray)
-                {
-                    txtNickname.Text = "";
-                    txtNickname.ForeColor = System.Drawing.Color.Black;
-                }
-            };
-            txtNickname.LostFocus += (s, e) =>
-            {
-                if (string.IsNullOrWhiteSpace(txtNickname.Text))
-                {
-                    txtNickname.Text = "Enter Nickname";
-                    txtNickname.ForeColor = System.Drawing.Color.Gray;
-                }
-            };
-            this.Controls.Add(txtNickname);
-            // 닉네임 변경 시 NicknameConfirmed 초기화
-            txtNickname.TextChanged += TxtNickname_TextChanged;
-
-            // 닉네임 확인 버튼
-            Button btnNicknameOk = new Button();
-            btnNicknameOk.Text = "Nickname OK";
-            btnNicknameOk.Font = new System.Drawing.Font("Arial", 11);
-            btnNicknameOk.Size = new System.Drawing.Size(150, 28);
-            btnNicknameOk.Location = new System.Drawing.Point(350, 328);
-            btnNicknameOk.Click += BtnNicknameOk_Click;   // 아래에서 만들 핸들러
-            this.Controls.Add(btnNicknameOk);
+            lblBoardSizeTitle.Font = labelFont;
+            lblPlayerCountTitle.Font = labelFont;
+            lblNicknameTitle.Font = labelFont;
+            lblRoomCodeTitle.Font = labelFont;
+            lblBoardSizeTitle.ForeColor = Theme.C_TEXT;
+            lblPlayerCountTitle.ForeColor = Theme.C_TEXT;
+            lblNicknameTitle.ForeColor = Theme.C_TEXT;
+            lblRoomCodeTitle.ForeColor = Theme.C_TEXT;
         }
+
+        //  placeholder 처리
+        private void SetupPlaceholders()
+        {
+            SetPlaceholder(txtNickname, "Enter Nickname");
+            SetPlaceholder(txtRoomCode, "Enter Room Code");
+        }
+
+        private void SetPlaceholder(TextBox tb, string placeholder)
+        {
+            tb.Tag = placeholder;
+
+            // 초기 상태 placeholder
+            tb.Text = placeholder;
+            tb.ForeColor = Color.Gray;
+
+            tb.GotFocus += TextBox_GotFocus;
+            tb.LostFocus += TextBox_LostFocus;
+        }
+
+        private void TextBox_GotFocus(object sender, EventArgs e)
+        {
+            var tb = (TextBox)sender;
+            string placeholder = tb.Tag as string;
+
+            if (tb.ForeColor == Color.Gray && tb.Text == placeholder)
+            {
+                tb.Text = "";
+                tb.ForeColor = Theme.C_TEXT;
+            }
+        }
+
+        private void TextBox_LostFocus(object sender, EventArgs e)
+        {
+            var tb = (TextBox)sender;
+            string placeholder = tb.Tag as string;
+
+            if (string.IsNullOrWhiteSpace(tb.Text))
+            {
+                tb.Text = placeholder;
+                tb.ForeColor = Color.Gray;
+            }
+        }
+
 
         // ====== 버튼 이벤트 함수 ======
 

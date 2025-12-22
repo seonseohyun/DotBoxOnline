@@ -12,12 +12,6 @@ namespace DotsAndBoxes
 {
     public partial class GameResultForm : Form
     {
-        private Label lblResultMessage;
-        private Label lblScoreSummary; // 점수 요약용 라벨
-        private Button btnRestart;
-        private Button btnGoMain;
-        private Panel pnlButtonArea;
-
         // 재시작에 필요한 정보 저장용
         private int _boardSize;
         private bool _isAIMode;
@@ -37,7 +31,6 @@ namespace DotsAndBoxes
             Restart,
             GoMain
         }
-
         //  게임 설정을 받는 생성자
         public GameResultForm(
             int boardSize,
@@ -51,7 +44,9 @@ namespace DotsAndBoxes
             _players = players ?? new List<string>();
 
             InitializeComponent();
-            BuildUI();
+
+            this.DoubleBuffered = true;
+            ApplyTheme();
         }
 
         // 멀티용 생성자
@@ -70,54 +65,29 @@ namespace DotsAndBoxes
             _gameRound = gameRound;
         }
 
-        private void BuildUI()
+        private void ApplyTheme()
         {
-            // 폼 기본 설정
-            this.Text = "Game - Result";
-            this.ClientSize = new Size(400, 300);
-            this.StartPosition = FormStartPosition.CenterScreen;
+            Theme.ApplyForm(this);
+            pnlButtonArea.BackColor = Theme.C_BG;
 
-            // === 결과 메시지 영역 ===
-            lblResultMessage = new Label();
-            lblResultMessage.Text = "win"; // 나중에 win/lose/draw로 변경
-            lblResultMessage.Dock = DockStyle.Top;
-            lblResultMessage.Height = 120;
-            lblResultMessage.Font = new Font("맑은 고딕", 24, FontStyle.Bold);
-            lblResultMessage.TextAlign = ContentAlignment.MiddleCenter;
+            // 큰 결과 텍스트
+            lblResultMessage.ForeColor = Theme.C_TEXT;
+            lblResultMessage.Font = new Font("Segoe UI", 34f, FontStyle.Bold);
 
-            // === 점수 요약 라벨 ===
-            lblScoreSummary = new Label();                                  // 수정
-            lblScoreSummary.Text = "";                                      // 수정
-            lblScoreSummary.Dock = DockStyle.Top;                           // 수정
-            lblScoreSummary.Height = 40;                                    // 수정
-            lblScoreSummary.Font = new Font("맑은 고딕", 12, FontStyle.Regular); // 수정
-            lblScoreSummary.TextAlign = ContentAlignment.MiddleCenter;      // 수정
+            // 점수요약
+            lblScoreSummary.ForeColor = Theme.C_TEXT_DIM;
+            lblScoreSummary.Font = new Font("Segoe UI", 20f, FontStyle.Bold);
 
-            // === 버튼 영역 ===
-            pnlButtonArea = new Panel();
-            pnlButtonArea.Dock = DockStyle.Bottom;
-            pnlButtonArea.Height = 100;
+            // 버튼
+            Theme.ApplyButton(btnRestart);
+            Theme.ApplyButton(btnGoMain);
 
-            btnRestart = new Button();
-            btnRestart.Text = "restart";
-            btnRestart.Size = new Size(120, 40);
-            btnRestart.Location = new Point(50, 30);
-            btnRestart.Click += BtnRestart_Click;
-
-            btnGoMain = new Button();
-            btnGoMain.Text = "main";
-            btnGoMain.Size = new Size(120, 40);
-            btnGoMain.Location = new Point(230, 30);
-            btnGoMain.Click += BtnMain_Click;
-
-            pnlButtonArea.Controls.Add(btnRestart);
-            pnlButtonArea.Controls.Add(btnGoMain);
-
-            // === 폼에 컨트롤 추가 ===
-            this.Controls.Add(pnlButtonArea);
-            this.Controls.Add(lblScoreSummary);
-            this.Controls.Add(lblResultMessage);
+            btnRestart.Text = "RESTART";
+            btnGoMain.Text = "MAIN";
+            btnRestart.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
+            btnGoMain.Font = new Font("Segoe UI", 12f, FontStyle.Bold);
         }
+
 
         private void BtnRestart_Click(object sender, EventArgs e)
         {
@@ -149,11 +119,9 @@ namespace DotsAndBoxes
         {
             lblResultMessage.Text = resultText;
         }
-
-        // 점수 요약 텍스트 바꾸는 용도
         public void SetScoreSummary(string summaryText)
         {
-            lblScoreSummary.Text = summaryText;
+            lblScoreSummary.Text = summaryText ?? "";
         }
     }
 }
