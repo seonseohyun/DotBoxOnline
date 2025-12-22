@@ -22,10 +22,6 @@ namespace DotsAndBoxes
         private int[,] vLineOwner;
         private int[,] boxes;
 
-        private Label lblPlayer1Score;
-        private Label lblPlayer2Score;
-        private Label lblPlayer3Score;
-
         // 접속 플레이어 (최대 3명)
         private List<string> _players = new List<string>();
 
@@ -36,11 +32,14 @@ namespace DotsAndBoxes
         private int _currentPlayerIndex;
 
         // 멀티 모드용 playerId 리스트 (서버 ID)
-        private List<string> _playerIds = new List<string>(); // playerId (p1, p2, ...)저장용
+        private List<string> _playerIds = new List<string>();
 
         private int _maxPlayers = 3; // 기본값 3
-
         private bool isInitialized = false;
+
+        private readonly Color _p1Color = Color.FromArgb(70, 110, 160);
+        private readonly Color _p2Color = Color.FromArgb(160, 90, 90);
+        private readonly Color _p3Color = Color.FromArgb(90, 130, 100);
 
         private enum PlayerType { Player1, Player2, AI }
         private PlayerType currentPlayer;
@@ -57,7 +56,8 @@ namespace DotsAndBoxes
             MultiOnline  // 서버 연동 멀티
         }
 
-        private GameMode _mode = GameMode.Single;   // 기본은 싱글
+        // 기본은 싱글
+        private GameMode _mode = GameMode.Single;
 
         // 멀티 모드용 : 방/플레이어 정보
         private string _roomId;              
@@ -67,7 +67,8 @@ namespace DotsAndBoxes
         private long _lastSeq = 0;                  
         private System.Windows.Forms.Timer _drawTimer;
 
-        private bool _gameEnded = false;   // 게임끝 결과 처리
+        // 게임끝 결과 처리
+        private bool _gameEnded = false;   
 
         // GamePlayForm이 담당하는 라운드 번호
         private int _gameRound;
@@ -133,8 +134,8 @@ namespace DotsAndBoxes
         private void InitializeGame()
         {
             InitializeComponent();
-            this.DoubleBuffered = true;
-            BuildUI();
+            //this.DoubleBuffered = true;
+            //BuildUI();
 
             dots = new PointF[N, N];
             hLines = new bool[N, N - 1];
@@ -174,6 +175,15 @@ namespace DotsAndBoxes
                     StartDrawPolling();
                 }
             };
+
+            // 폼 크기가 바뀌면 보드도 다시 중앙 정렬
+            this.Resize += (s, e) =>
+            {
+                if (!isInitialized) return;
+
+                GenerateDots();   
+                Invalidate();   
+            };
         }
 
         // 상단 접속자 3칸 맞춰주는 메서드
@@ -186,7 +196,7 @@ namespace DotsAndBoxes
             }
             while (_players.Count < 3)
             {
-                _players.Add("대기중");
+                _players.Add(" ");
             }
         }
         
@@ -198,8 +208,7 @@ namespace DotsAndBoxes
                 // 2인 모드 → Player3 슬롯 비활성화 
                 if (lblPlayer3Score != null)
                 {
-                    lblPlayer3Score.Text = "Disabled (2P mode)"; 
-                    lblPlayer3Score.ForeColor = Color.Gray; 
+                    lblPlayer3Score.BackColor = Color.White;
                 }
             }
             else
@@ -212,62 +221,16 @@ namespace DotsAndBoxes
             }
         }
 
-        private void BuildUI()
-        {
-            this.Text = "Dots & Boxes";
-            this.ClientSize = new Size(600, 700);
-            this.StartPosition = FormStartPosition.CenterScreen;
-
-            TableLayoutPanel tlp = new TableLayoutPanel
-            {
-                RowCount = 1,
-                ColumnCount = 3,
-                Dock = DockStyle.Top,
-                Height = 60,
-            };
-
-            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-            tlp.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33f));
-
-            // 접속자 이름 준비 (최대 3명)
-            string name1 = _players[0];
-            string name2 = _players[1];
-            string name3 = _players[2];
-
-            lblPlayer1Score = new Label
-            {
-                Text = $"{name1}: 0",
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill,
-                Font = new Font("Arial", 12, FontStyle.Bold)
-            };
-
-            lblPlayer2Score = new Label
-            {
-                Text = $"{name2}: 0",
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill,
-                Font = new Font("Arial", 12, FontStyle.Bold)
-            };
-
-            lblPlayer3Score = new Label
-            {
-                Text = $"{name3}: 0",
-                TextAlign = ContentAlignment.MiddleCenter,
-                Dock = DockStyle.Fill,
-                Font = new Font("Arial", 12, FontStyle.Bold)
-            };
-
-            tlp.Controls.Add(lblPlayer1Score, 0, 0);
-            tlp.Controls.Add(lblPlayer2Score, 1, 0);
-            tlp.Controls.Add(lblPlayer3Score, 2, 0);
-
-            this.Controls.Add(tlp);
-        }
-
         private void GenerateDots()
         {
+            // 보드의 실제 픽셀 크기 계산
+            float boardWidth = (N - 1) * spacing;
+            float boardHeight = (N - 1) * spacing;
+
+            // 중앙 정렬용 시작 좌표 계산
+            startX = (this.ClientSize.Width - boardWidth) / 2f;
+            startY = (this.ClientSize.Height - boardHeight) / 2f;
+
             for (int r = 0; r < N; r++)
                 for (int c = 0; c < N; c++)
                     dots[r, c] = new PointF(startX + c * spacing, startY + r * spacing);
@@ -277,18 +240,23 @@ namespace DotsAndBoxes
         {
             if (!isInitialized) return;
             Graphics g = e.Graphics;
-            Brush dotBrush = Brushes.Black;
-            Brush player1BoxBrush = Brushes.LightBlue;
-            Brush player2BoxBrush = isAIMode ? Brushes.LightCoral : Brushes.LightGreen;
-            Brush player3BoxBrush = Brushes.Khaki; // 3번째 플레이어 색
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-            // ★ 선 색을 플레이어 인덱스별로 매핑 (0,1,2)
-            Pen[] linePens = new Pen[]
+            Brush dotBrush = Brushes.Black;
+
+            Brush player1BoxBrush = new SolidBrush(Color.FromArgb(215, 225, 235));
+            Brush player2BoxBrush = new SolidBrush(Color.FromArgb(235, 215, 215));
+            Brush player3BoxBrush = new SolidBrush(Color.FromArgb(220, 230, 220));
+
+            float dotRadius = 6f;      
+            float lineThickness = 5f;
+            Color[] playerLineColors = new Color[]
             {
-                Pens.Blue,   // 0번 플레이어
-                Pens.Red,    // 1번 플레이어
-                Pens.Green   // 2번 플레이어
+                Color.FromArgb(70, 110, 160), 
+                Color.FromArgb(160, 90, 90),  
+                Color.FromArgb(90, 130, 100) 
             };
+
 
             for (int r = 0; r < N - 1; r++)
             {
@@ -305,42 +273,59 @@ namespace DotsAndBoxes
             {
                 for (int c = 0; c < N; c++)
                 {
-                    //if (c < N - 1 && hLines[r, c]) g.DrawLine(hLineOwner[r, c] == 0 ? Pens.Blue : Pens.Red, dots[r, c], dots[r, c + 1]);
-                    //if (r < N - 1 && vLines[r, c]) g.DrawLine(vLineOwner[r, c] == 0 ? Pens.Blue : Pens.Red, dots[r, c], dots[r + 1, c]);
+                    // 가로선
                     if (c < N - 1 && hLines[r, c])
                     {
                         int owner = hLineOwner[r, c];
-                        Pen p;
 
-                        if (owner == 0) p = Pens.Blue;   // 플레이어1
-                        else if (owner == 1) p = Pens.Red;    // 플레이어2
-                        else if (owner == 2) p = Pens.Green;  // 플레이어3
-                        else p = Pens.Gray;   // 혹시 모를 에러 대비
+                        Color lineColor = (owner >= 0 && owner < playerLineColors.Length)
+                            ? playerLineColors[owner]
+                            : Color.Gray;
 
-                        g.DrawLine(p, dots[r, c], dots[r, c + 1]);
+                        using (var pen = new Pen(lineColor, lineThickness))
+                        {
+                            pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                            pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                            g.DrawLine(pen, dots[r, c], dots[r, c + 1]);
+                        }
                     }
 
+                    // 세로선
                     if (r < N - 1 && vLines[r, c])
                     {
                         int owner = vLineOwner[r, c];
-                        Pen p;
 
-                        if (owner == 0) p = Pens.Blue;
-                        else if (owner == 1) p = Pens.Red;
-                        else if (owner == 2) p = Pens.Green;
-                        else p = Pens.Gray;
+                        Color lineColor = (owner >= 0 && owner < playerLineColors.Length)
+                            ? playerLineColors[owner]
+                            : Color.Gray;               
 
-                        g.DrawLine(p, dots[r, c], dots[r + 1, c]);
+                        using (var pen = new Pen(lineColor, lineThickness))
+                        {
+                            pen.StartCap = System.Drawing.Drawing2D.LineCap.Round;
+                            pen.EndCap = System.Drawing.Drawing2D.LineCap.Round;
+                            g.DrawLine(pen, dots[r, c], dots[r + 1, c]);
+                        }
                     }
                 }
             }
-
+            // 점 그리기
             for (int r = 0; r < N; r++)
+            {
                 for (int c = 0; c < N; c++)
-                    g.FillEllipse(dotBrush, dots[r, c].X - 4, dots[r, c].Y - 4, 8, 8);
+                {
+                    g.FillEllipse(dotBrush,
+                        dots[r, c].X - dotRadius,
+                        dots[r, c].Y - dotRadius,
+                        dotRadius * 2,
+                        dotRadius * 2);
+                }
+            }
+            ((SolidBrush)player1BoxBrush).Dispose();
+            ((SolidBrush)player2BoxBrush).Dispose();
+            ((SolidBrush)player3BoxBrush).Dispose();
         }
 
-        // 멀티 모드용 MouseClick - 모드별 분기
+        // 멀티 모드용 MouseClick
         private void GamePlayForm_MouseClick(object sender, MouseEventArgs e)
         {
             if (_mode == GameMode.Single)
@@ -349,7 +334,7 @@ namespace DotsAndBoxes
                 _ = HandleMouseClick_MultiAsync(e); // async 호출
         }
 
-        // 싱글 모드용 클릭 처리 (기존 로직 이동)
+        // 싱글 모드용 클릭 처리 
         private void HandleMouseClick_Single(MouseEventArgs e)
         {
             if (isAIMode && currentPlayer != PlayerType.Player1) return;
@@ -646,16 +631,6 @@ namespace DotsAndBoxes
 
         private void UpdateScores()
         {
-            //int score1 = 0, score2 = 0;
-            //for (int r = 0; r < N - 1; r++)
-            //    for (int c = 0; c < N - 1; c++)
-            //    {
-            //        if (boxes[r, c] == 0) score1++;
-            //        else if (boxes[r, c] == 1) score2++;
-            //    }
-            //lblPlayer1Score.Text = $"Player1: {score1}";
-            //lblPlayer2Score.Text = isAIMode ? $"AI: {score2}" : $"Player2: {score2}";
-            
             int[] scores = CalculateScores();
 
             string name1 = _players[0];
@@ -667,9 +642,20 @@ namespace DotsAndBoxes
             int s2 = (_activePlayerCount > 1) ? scores[1] : 0;
             int s3 = (_activePlayerCount > 2) ? scores[2] : 0;
 
+            lblPlayer1Score.ForeColor = _p1Color;
+            lblPlayer2Score.ForeColor = _p2Color;
+            lblPlayer3Score.ForeColor = _p3Color;
+
             lblPlayer1Score.Text = $"{name1}: {s1}";
             lblPlayer2Score.Text = $"{name2}: {s2}";
-            lblPlayer3Score.Text = $"{name3}: {s3}";
+            if (_activePlayerCount < 3)
+            {
+                lblPlayer3Score.Text = string.Empty; 
+            }
+            else
+            {
+                lblPlayer3Score.Text = $"{name3}: {s3}";
+            }
         }
 
         // 모든 수가 끝나면 결과창 띄우는 메서드

@@ -8,6 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
+
 namespace DotsAndBoxes
 {
     public partial class MainForm : Form
@@ -17,24 +18,10 @@ namespace DotsAndBoxes
         public MainForm()
         {
             InitializeComponent();
-            BuildUI();
-            LoadChildForm(new HomeForm());      // 시작 화면 = HomeForm
+            LoadChildForm(new HomeForm());
         }
 
-        private void BuildUI()
-        {
-            this.Text = "Dots and Boxes";
-            this.ClientSize = new Size(800, 600);
-            this.StartPosition = FormStartPosition.CenterScreen;
-
-            // 화면 전환용 패널
-            mainPanel = new Panel();
-            mainPanel.Dock = DockStyle.Fill;     // MainForm 전체를 채우도록
-            mainPanel.BackColor = Color.White;   // 임시 배경색
-            this.Controls.Add(mainPanel);
-        }
-
-        // ====== 화면전환 하는 함수 (모든 폼 화면) ======
+        // 화면전환 함수
         public void LoadChildForm(Form childForm)
         {
             // 기존 화면 제거
@@ -48,18 +35,6 @@ namespace DotsAndBoxes
             // panel에 부착
             mainPanel.Controls.Add(childForm);
             childForm.Show(); // 화면 표시
-        }
-
-        // ====== 버튼 이벤트 함수 ======
-        private void BtnSingle_Click(object sender, EventArgs e)
-        {
-            // SingleOptionForm을 panel에 로드
-            LoadChildForm(new SingleOptionForm());
-        }
-        private void BtnMulti_Click(object sender, EventArgs e)
-        {
-            // MultiOptionForm을 panel에 로드
-            LoadChildForm(new MultiOptionForm());
         }
     }
 }
