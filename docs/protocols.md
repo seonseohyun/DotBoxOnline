@@ -166,26 +166,28 @@ curl http://43.201.40.98:8080/players
 방을 생성한 플레이어는 서버에서 `HostId`로 관리되며, 게임 시작 시 항상 첫 턴을 갖는 방장이 된다.
 
 
-| 속성                | 내용                 |
+| 속성                 | 내용                  |
 | :----------------- | :------------------ |
 | **Method**         | `POST`              |
 | **Path**           | `/room/create`      |
 | **Content-Type**   | `application/json`  |
 | **Request Body**   | `CreateRoomRequest` |
-| **Response**       | 방 정보(JSON)         |
 | **성공 HTTP Status** | `200 OK`            |
 | **실패 HTTP Status** | `400 Bad Request`   |
 
 ### Request Body:
 ```json
 {
-  "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
-  "maxPlayers": 2
+  "playerId": "seonseo",
+  "maxPlayers": 3,
+  "boardIndex": 0
 }
 ```
-| 필드명      | 타입    | 필수 | 설명                                      |
-| --------  | ------ | --  | ------------------------------------     |
-| playerId  | string | O   | 방을 생성하는 플레이어 ID (`/connect` 에서 발급) |
+| 필드명      | 타입     | 필수|    설명                                     |
+| ---------- | ------ | -- | ------------------------------------------ |
+| playerId   | string | O  | 방 생성 플레이어 ID                            |
+| maxPlayers | number | X  | 방 정원 (허용: `2` 또는 `3`, 기본값 `3`)         |
+| boardIndex | number | X  | 보드 크기 선택 인덱스 (서버에서 유효성 검증) |
 
 ### Response:
 * 성공 (200 OK)
@@ -204,7 +206,8 @@ curl http://43.201.40.98:8080/players
     ],
     "maxPlayers": 3,
     "isFull": false,
-    "currentTurn": null
+    "currentTurn": null,
+    "boardIndex": 0
   }
   ```
 | 필드명                      | 타입          | 설명                                |
@@ -223,6 +226,11 @@ curl http://43.201.40.98:8080/players
   ```json
   // playerId가 존재하지 않을 때
   { "error": "Invalid playerId" }
+  // 인원수 유효성 검사 에러
+  { "error": "Invalid maxPlayers (allowed: 2 or 3)" }
+  // 맵 크기 인덱스 유효성 검사 에러
+  { "error": "Invalid boardIndex" }
+
   ```
 ---
 
@@ -274,16 +282,24 @@ curl http://43.201.40.98:8080/players
         "playerId": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
         "playerName": "friend"
       }
-    ]
+    ],
+  "maxPlayers": 3,
+  "isFull": false,
+  "currentTurn": "string",
   }
   ```
-  | 필드명         | 타입       | 설명                  |
-  | ----------- | -------- | ------------------- |
-  | status      | string   | 성공 시 항상 `"ok"`      |
-  | roomId      | string   | 방 ID                |
-  | inviteCode  | string   | 방 초대 코드             |
-  | players     | string[] | 방에 속한 플레이어 ID 목록    |
-  | playerInfos | object[] | 각 플레이어의 ID/이름 정보 목록 |
+| 필드명                      | 타입          | 설명                                     |
+| :----------------------- | :---------- | :------------------------------------- |
+| status                   | string      | 성공 시 `"ok"`                            |
+| roomId                   | string      | 방 ID                                   |
+| inviteCode               | string      | 방 초대 코드                                |
+| players                  | string[]    | 방에 있는 플레이어 ID 목록                       |
+| playerInfos              | object[]    | 플레이어 정보 목록                             |
+| playerInfos[].playerId   | string      | 플레이어 ID                                |
+| playerInfos[].playerName | string      | 플레이어 이름                                |
+| maxPlayers               | number      | 방 최대 인원                                |
+| isFull                   | bool        | `players.length >= maxPlayers` 여부      |
+| currentTurn              | string|null | 현재 턴 플레이어 ID (게임 시작 전일 수 있어 `null` 가능) |
 
 * 실패 
   ```json
@@ -292,6 +308,10 @@ curl http://43.201.40.98:8080/players
 
   // 2) 방이 가득 찼을 때 - 400 Bad Request 
   { "error": "Room is full" }
+
+  // 3) 잘못된 PlayerId
+  { "error": "Invalid playerId" }
+
   ```
 ---
 
@@ -334,12 +354,6 @@ curl http://43.201.40.98:8080/players
     "players": [
       "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
     ],
-    "playerInfos": [
-      {
-        "playerId": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
-        "playerName": "friend"
-      }
-    ],
     "currentTurn": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8",
     "isOwnerChanged": true,
     "newOwnerId": "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
@@ -350,7 +364,6 @@ curl http://43.201.40.98:8080/players
     "roomId": "b1a2c3d4e5f6478390ab1c2d3e4f5a6b",
     "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
     "players": [],
-    "playerInfos": [],
     "currentTurn": null,
     "isOwnerChanged": false,
     "newOwnerId": null
@@ -361,7 +374,6 @@ curl http://43.201.40.98:8080/players
   | roomId         | string      | 방 ID                           |
   | playerId       | string      | 방에서 나간 플레이어 ID                 |
   | players        | string[]    | 방에 남아 있는 플레이어 ID 목록 (없으면 빈 배열) |
-  | playerInfos    | object[]    | 남은 플레이어들의 ID/이름 정보 목록          |
   | currentTurn    | string|null | 현재 턴 플레이어 ID (없으면 null)        |
   | isOwnerChanged | bool        | 방장이 변경되었는지 여부                  |
   | newOwnerId     | string|null | 새 방장 ID (없으면 null)             |
@@ -376,6 +388,7 @@ curl http://43.201.40.98:8080/players
   ```
 
 ---
+
 ## 6. 방 상태 조회 (GET /room/state/{roomId})
 특정 roomId에 해당하는 방의 현재 상태 조회
 | 속성                 | 내용                     |
@@ -387,6 +400,12 @@ curl http://43.201.40.98:8080/players
 | **Response**       | 방 상태(JSON)             |
 | **성공 HTTP Status** | `200 OK`               |
 | **실패 HTTP Status** | `404 Not Found`        |
+
+### Path Param:
+| 파라미터   | 타입     |  필수 | 설명   |
+| :----- | :----- | :-: | :--- |
+| roomId | string |  O  | 방 ID |
+
 
 ### Request:
 * HTTP Raw 예시 
@@ -411,7 +430,7 @@ curl http://43.201.40.98:8080/players
       "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
       "c3d2e1f0a9b8c7d6e5f4a3b2c1d0e9f8"
     ],
-    "playerInfos": [
+    "playersInfos": [
       {
         "playerId": "8f8b16c9f2e44f1f9a9e4a7e4d1c2b3",
         "playerName": "seonseo"
@@ -421,19 +440,26 @@ curl http://43.201.40.98:8080/players
         "playerName": "friend"
       }
     ],
+    "maxPlayers": 3,
     "isFull": false,
-    "gameRound": 1     // ★ 추가됨
-
+    "currentTurn": "string",
+    "boardIndex": 0,
+    "gameRound": 1
   }
   ```
-  | 필드명         | 타입       | 설명                     |
-  | ----------- | -------- | ---------------------- |
-  | roomId      | string   | 방 ID                   |
-  | inviteCode  | string   | 방 초대 코드                |
-  | players     | string[] | 방에 속한 플레이어 ID 목록       |
-  | playerInfos | object[] | 각 플레이어의 ID/이름 정보 목록    |
-  | isFull      | bool     | 현재 인원이 최대 인원에 도달했는지 여부 |
-  | gameRound   | int      | 현재 방의 게임 라운드 번호 |
+| 필드명                       | 타입          | 설명                                |
+| :------------------------ | :---------- | :-------------------------------- |
+| roomId                    | string      | 방 ID                              |
+| inviteCode                | string      | 방 초대 코드                           |
+| players                   | string[]    | 방에 있는 플레이어 ID 목록                  |
+| playersInfos              | object[]    | 플레이어 정보 목록                        |
+| playersInfos[].playerId   | string      | 플레이어 ID                           |
+| playersInfos[].playerName | string      | 플레이어 이름                           |
+| maxPlayers                | number      | 방 최대 인원                           |
+| isFull                    | bool        | `players.length >= maxPlayers` 여부 |
+| currentTurn               | string|null | 현재 턴 플레이어 ID (게임 시작 전 `null` 가능)  |
+| gameRound                 | number      | 현재 게임 라운드 번호                      |
+| boardIndex                | number      | 보드 크기 선택 인덱스 |
 
 * 실패 (404 Not Found)
     ```json
@@ -514,6 +540,7 @@ curl http://43.201.40.98:8080/players
   { "error": "Game already started" }
   ```
 ---
+
 ## 8-1. 선 긋기 (POST /choice)
 
 멀티플레이시 차례에 해당하는 유저가 선택한 선 정보를 전달한다.  
@@ -603,6 +630,7 @@ curl http://43.201.40.98:8080/players
   { "status": "error", "errorCode": "INVALID_OR_DUPLICATED_LINE" }
   ```
 ---
+
 ## 8-2. 선 이벤트 조회 (GET /draw)
 상대가 그린 선 이벤트를 조회하여 정보를 전달합니다.
 | 속성                 | 내용                   |
