@@ -69,8 +69,8 @@ namespace DotsAndBoxes
             this.btnGoMain.Click += new System.EventHandler(this.BtnMain_Click);
 
             // pnlButtonArea Controls
-            this.Controls.Add(this.btnRestart);
-            this.Controls.Add(this.btnGoMain);
+            this.pnlButtonArea.Controls.Add(this.btnGoMain);
+            this.pnlButtonArea.Controls.Add(this.btnRestart);
 
             // GameResultForm
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;

@@ -34,6 +34,7 @@ namespace DotsAndBoxes
         public bool isFull { get; set; }
         public string currentTurn { get; set; }
         public PlayerInfo[] playerInfos { get; set; } // 플레이어의 ID + 닉네임 정보
+        public int boardIndex { get; set; }
     }
 
     // /room/join 응답 DTO
@@ -60,6 +61,7 @@ namespace DotsAndBoxes
         public PlayerInfo[] playerInfos { get; set; }
         public PlayerInfo[] playersInfos { get; set; }// /room/state에서 내려오는 playersInfos용
         public int gameRound { get; set; }
+        public int boardIndex { get; set; }
     }
 
     // /game/start 응답 DTO
@@ -146,8 +148,9 @@ namespace DotsAndBoxes
         // 모든 통신에서 재사용할 HttpClient
         private static readonly HttpClient httpClient = new HttpClient
         {
-            BaseAddress = new Uri("http://43.201.40.98:8080")
-            //BaseAddress = new Uri("http://localhost:5217")
+            BaseAddress = new Uri("http://43.201.40.98:8080"),
+            Timeout = TimeSpan.FromSeconds(5)
+
         };
 
         /// /connect 호출해서 플레이어 세션 발급
@@ -197,12 +200,13 @@ namespace DotsAndBoxes
         }
 
         /// /room/create : 방 생성
-        public static async Task<CreateRoomResponse> CreateRoomAsync(string playerId, int maxPlayers)
+        public static async Task<CreateRoomResponse> CreateRoomAsync(string playerId, int maxPlayers, int boardIndex)
         {
             var requestObj = new
             {
                 playerId = playerId,
-                maxPlayers = maxPlayers // 서버로 인원 수 전송
+                maxPlayers = maxPlayers, // 서버로 인원 수 전송
+                boardIndex = boardIndex
             };
 
             string json = JsonConvert.SerializeObject(requestObj);

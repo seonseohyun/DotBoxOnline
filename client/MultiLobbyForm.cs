@@ -20,6 +20,7 @@ namespace DotsAndBoxes
         private List<string> _currentPlayers = new List<string>(); // 게임 화면 상단에 띄울 "닉네임" 리스트
         private List<string> _currentPlayerIds = new List<string>(); // 서버 playerId 리스트 (호스트 판별용)
         private int _lastJoinedGameRound = 0; //마지막으로 입장한 라운드 번호
+        private int _boardIndex;
 
 
         public MultiLobbyForm()
@@ -37,12 +38,15 @@ namespace DotsAndBoxes
             string inviteCode,
             string[] players,
             PlayerInfo[] playerInfos,
-            int lastRound ) : this()
+            int lastRound,
+            int boardIndex) : this()
         {
             _roomId = roomId;
             _myPlayerId = myPlayerId;
             _lastJoinedGameRound = lastRound;
             _maxPlayers = AppSession.MaxPlayers;
+            _boardIndex = boardIndex;
+
 
             // 재시작 여부 판단 
             bool isRestart =
@@ -68,7 +72,7 @@ namespace DotsAndBoxes
                     _currentPlayers = BuildDisplayNames(_currentPlayerIds, infos);
 
                     UpdatePlayers(_currentPlayers);
-
+                    // _boardIndex = state.boardIndex;
                     StartLobbyTimer();
                 };
                 return; // 기존 코드 실행 안 함
@@ -82,6 +86,19 @@ namespace DotsAndBoxes
             UpdatePlayers(_currentPlayers); // 라벨 업데이트 (닉네임 기준)
             StartLobbyTimer(); // 로비 상태 주기적으로 체크
         }
+
+        // boardIndex(0/1/2)를 실제 보드 크기(5/6/7)로 변환
+        private int BoardIndexToSize(int boardIndex)
+        {
+            switch (boardIndex)
+            {
+                case 0: return 5;  // 0 = 5x5
+                case 1: return 6;  // 1 = 6x6
+                case 2: return 7;  // 2 = 7x7
+                default: return 5; // 예외값이면 5x5
+            }
+        }
+
         // 테마/스타일 적용
         private void ApplyTheme()
         {
@@ -134,7 +151,7 @@ namespace DotsAndBoxes
             lblPlayer3.ForeColor = Theme.C_TEXT;
         }
 
-        // [추가] 뒤로가기 버튼 (로비에서 홈으로)
+        // 뒤로가기 버튼 (로비에서 홈으로)
         private void BtnBack_Click(object sender, EventArgs e)
         {
             // 타이머 정리
@@ -148,7 +165,6 @@ namespace DotsAndBoxes
             MainForm main = (MainForm)this.ParentForm;
             main.LoadChildForm(new HomeForm());
         }
-
 
         // 타이머 세팅
         private void StartLobbyTimer()
@@ -246,9 +262,16 @@ namespace DotsAndBoxes
                     playersForGame = BuildDisplayNames(playersIdList, infos);
                 }
 
+                int boardSize = BoardIndexToSize(_boardIndex);
+                if (_lobbyTimer != null)
+                {
+                    _lobbyTimer.Stop();
+                    _lobbyTimer.Dispose();
+                    _lobbyTimer = null;
+                }
                 // 2) 방장 자신의 화면은 바로 게임 화면으로 전환
                 MainForm main = (MainForm)this.ParentForm;
-                main.LoadChildForm(new GamePlayForm(5, playersForGame, _currentPlayerIds, _roomId, _myPlayerId, gameRound));
+                main.LoadChildForm(new GamePlayForm(boardSize, playersForGame, _currentPlayerIds, _roomId, _myPlayerId, gameRound));
             }
             catch (Exception ex)
             {
@@ -293,6 +316,8 @@ namespace DotsAndBoxes
                 if (iAmHost)
                     return;
 
+                // _boardIndex = state.boardIndex;
+
                 // 5) 방장이 아니면 게임 시작 감지
                 if (!string.IsNullOrEmpty(state.currentTurn) && state.gameRound > _lastJoinedGameRound)
                 {
@@ -300,9 +325,10 @@ namespace DotsAndBoxes
                     _lastJoinedGameRound = state.gameRound;
                     _lobbyTimer.Stop();
 
+                    int boardSize = BoardIndexToSize(_boardIndex);
                     MainForm main = (MainForm)this.ParentForm;
                     // 게임 화면에 정보넘김
-                    main.LoadChildForm(new GamePlayForm(5, _currentPlayers, _currentPlayerIds, _roomId, _myPlayerId, state.gameRound));
+                    main.LoadChildForm(new GamePlayForm(boardSize, _currentPlayers, _currentPlayerIds, _roomId, _myPlayerId, state.gameRound));
                 }
             }
             catch
