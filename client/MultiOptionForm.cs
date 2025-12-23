@@ -20,6 +20,17 @@ namespace DotsAndBoxes
             SetupPlaceholders();
         }
         private bool _nicknameConfirmed = false;
+        
+        // 콤보박스(cbBoardSize) 선택 인덱스
+        private int GetBoardIndex()
+        {
+            int idx = cbBoardSize.SelectedIndex;
+
+            // 선택 안 되어있으면 기본값 0(5x5)로 처리
+            if (idx < 0) idx = 0;
+
+            return idx;
+        }
 
 
         // 테마 적용
@@ -209,8 +220,16 @@ namespace DotsAndBoxes
                 else                               
                     AppSession.MaxPlayers = 3;
 
+
+                int selectedBoardIndex = GetBoardIndex();
                 // playerId + nickname 같이 보냄
-                var roomRes = await ServerApi.CreateRoomAsync(AppSession.PlayerId, AppSession.MaxPlayers);
+                //var roomRes = await ServerApi.CreateRoomAsync(AppSession.PlayerId, AppSession.MaxPlayers);
+                var roomRes = await ServerApi.CreateRoomAsync(
+                    AppSession.PlayerId,
+                    AppSession.MaxPlayers,
+                    selectedBoardIndex
+                );
+                AppSession.BoardIndex = roomRes.boardIndex;
 
                 // 로비로 이동 (초대코드 전달)
                 MainForm main = (MainForm)this.ParentForm;
@@ -221,7 +240,8 @@ namespace DotsAndBoxes
                         roomRes.inviteCode,     
                         roomRes.players,        // string[]
                         roomRes.playerInfos,    // PlayerInfo[]
-                        0                       //lastRound (새 방이므로 0)
+                        0,                       //lastRound (새 방이므로 0)
+                        AppSession.BoardIndex
                     )
                 );
             }
@@ -309,6 +329,8 @@ namespace DotsAndBoxes
                     ? state.players.ToList()
                     : new List<string>();
 
+                 AppSession.BoardIndex = state.boardIndex;
+
                 // 3) 로비로 이동
                 MainForm main = (MainForm)this.ParentForm;
                 var infos = state.playerInfos ?? state.playersInfos;
@@ -319,7 +341,8 @@ namespace DotsAndBoxes
                         joinRes.inviteCode,      // 초대 코드
                         state.players,        // string[]
                         infos,     // PlayerInfo[]
-                        0          //lastRound (초기 입장은 0)
+                        0,          //lastRound (초기 입장은 0)
+                        AppSession.BoardIndex
                     )
                 );
             }

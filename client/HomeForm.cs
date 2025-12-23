@@ -16,6 +16,7 @@ namespace DotsAndBoxes
         public static string PlayerName { get; set; }
         public static DateTime? ConnectedAt { get; set; }
         public static int MaxPlayers { get; set; }   // 옵션창에서 인원수 선택시
+        public static int BoardIndex { get; set; } = 0;
     }
 
     public partial class HomeForm : Form
@@ -92,9 +93,30 @@ namespace DotsAndBoxes
             // 연결 실패시 넘어가지 않음
             if (string.IsNullOrEmpty(AppSession.PlayerId))
                 return;
-
-            MainForm main = (MainForm)this.ParentForm;
+            MainForm main = GetMainForm();
+            if (main == null)
+            {
+                MessageBox.Show("MainForm을 찾지 못했습니다.");
+                return;
+            }
             main.LoadChildForm(new SingleOptionForm());
+        }
+        // MainForm 찾는 함수
+        private MainForm GetMainForm()
+        {
+            // 1순위: TopLevelControl (컨트롤 트리 최상위)
+            MainForm main = this.TopLevelControl as MainForm;
+            if (main != null) return main;
+
+            // 2순위: 부모 컨트롤을 타고 올라가며 찾기
+            Control cur = this;
+            while (cur != null)
+            {
+                if (cur is MainForm) return (MainForm)cur;
+                cur = cur.Parent;
+            }
+
+            return null;
         }
 
         // Multi Play 클릭

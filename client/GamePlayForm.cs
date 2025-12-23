@@ -242,11 +242,11 @@ namespace DotsAndBoxes
             Graphics g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-            Brush dotBrush = Brushes.Black;
+            Brush dotBrush = new SolidBrush(Color.FromArgb(85, 85, 85));
 
-            Brush player1BoxBrush = new SolidBrush(Color.FromArgb(215, 225, 235));
-            Brush player2BoxBrush = new SolidBrush(Color.FromArgb(235, 215, 215));
-            Brush player3BoxBrush = new SolidBrush(Color.FromArgb(220, 230, 220));
+            Brush player1BoxBrush = new SolidBrush(Color.FromArgb(170, 200, 225));
+            Brush player2BoxBrush = new SolidBrush(Color.FromArgb(225, 185, 185));
+            Brush player3BoxBrush = new SolidBrush(Color.FromArgb(135, 180, 135));
 
             float dotRadius = 6f;      
             float lineThickness = 5f;
@@ -262,9 +262,12 @@ namespace DotsAndBoxes
             {
                 for (int c = 0; c < N - 1; c++)
                 {
-                    if (boxes[r, c] == 0) g.FillRectangle(player1BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
-                    else if (boxes[r, c] == 1) g.FillRectangle(player2BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
-                    else if (boxes[r, c] == 2)
+                    int owner = boxes[r, c];
+                    if (owner == 1)
+                        g.FillRectangle(player1BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
+                    else if (owner == 2)
+                        g.FillRectangle(player2BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
+                    else if (owner == 3)
                         g.FillRectangle(player3BoxBrush, dots[r, c].X + 4, dots[r, c].Y + 4, spacing - 8, spacing - 8);
                 }
             }
@@ -323,6 +326,7 @@ namespace DotsAndBoxes
             ((SolidBrush)player1BoxBrush).Dispose();
             ((SolidBrush)player2BoxBrush).Dispose();
             ((SolidBrush)player3BoxBrush).Dispose();
+            ((SolidBrush)dotBrush).Dispose();
         }
 
         // 멀티 모드용 MouseClick
@@ -496,16 +500,16 @@ namespace DotsAndBoxes
             if (isH)
             {
                 if (r > 0 && hLines[r - 1, c] && vLines[r - 1, c] && vLines[r - 1, c + 1] && boxes[r - 1, c] == -1)
-                { boxes[r - 1, c] = player; madeBox = true; }
+                { boxes[r - 1, c] = player +1; madeBox = true; }
                 if (r < N - 1 && hLines[r + 1, c] && vLines[r, c] && vLines[r, c + 1] && boxes[r, c] == -1)
-                { boxes[r, c] = player; madeBox = true; }
+                { boxes[r, c] = player +1; madeBox = true; }
             }
             else
             {
                 if (c > 0 && vLines[r, c - 1] && hLines[r, c - 1] && hLines[r + 1, c - 1] && boxes[r, c - 1] == -1)
-                { boxes[r, c - 1] = player; madeBox = true; }
+                { boxes[r, c - 1] = player +1; madeBox = true; }
                 if (c < N - 1 && vLines[r, c + 1] && hLines[r, c] && hLines[r + 1, c] && boxes[r, c] == -1)
-                { boxes[r, c] = player; madeBox = true; }
+                { boxes[r, c] = player +1; madeBox = true; }
             }
 
             return madeBox;
@@ -612,16 +616,17 @@ namespace DotsAndBoxes
         // 현재 보드 상태 기준으로 플레이어별 점수 계산
         private int[] CalculateScores()
         {
-            int[] scores = new int[_activePlayerCount];
+            // scores[0]=1P, scores[1]=2P, scores[2]=3P
+            int[] scores = new int[3];
 
             for (int r = 0; r < N - 1; r++)
             {
                 for (int c = 0; c < N - 1; c++)
                 {
                     int owner = boxes[r, c];
-                    if (owner >= 0 && owner < _activePlayerCount)
+                    if (owner >= 1 && owner <= 3)
                     {
-                        scores[owner]++;
+                        scores[owner - 1]++; 
                     }
                 }
             }
@@ -658,26 +663,64 @@ namespace DotsAndBoxes
             }
         }
 
+        // MainForm 찾는 함수
+        private MainForm GetMainForm()
+        {
+            foreach (Form f in Application.OpenForms)
+            {
+                if (f is MainForm)
+                    return (MainForm)f;
+            }
+            return null;
+        }
+
         // 모든 수가 끝나면 결과창 띄우는 메서드
         private void ShowGameResult()
         {
+            // UI 스레드 보장
+            if (this.InvokeRequired)
+            {
+                this.BeginInvoke(new Action(ShowGameResult));
+                return;
+            }
+
             int[] scores = CalculateScores();
 
-            // 2) 메인폼 찾기
-            MainForm main = (MainForm)this.ParentForm;
+            MainForm main = GetMainForm();
+            if (main == null)
+            {
+                MessageBox.Show("화면 전환 실패: MainForm을 찾지 못했습니다.");
+                return;
+            }
 
-            // 3) GameResultForm 생성
-            var resultForm = new GameResultForm(
-                N,              // 보드 크기
-                isAIMode,       // AI 모드인지
-                _players,       // 플레이어 이름 리스트
-                aiDifficulty,    // AI 난이도 (멀티면 무시)
-                _roomId,
-                _myPlayerId,
-                _gameRound
-            );
+            // 싱글(AI) / 멀티를 구분해서 GameResultForm 생성자 호출
+            GameResultForm resultForm;
 
-            // 4) 승자 판정 (2명/3명 모두 공용)
+            if (isAIMode)
+            {
+                // 싱글(AI) : 4개짜리 생성자 사용
+                resultForm = new GameResultForm(
+                    N,              // 보드 크기
+                    true,           // AI 모드
+                    _players,       // 플레이어 이름 리스트
+                    aiDifficulty    // AI 난이도
+                );
+            }
+            else
+            {
+                // 멀티 : 7개짜리 생성자 사용
+                resultForm = new GameResultForm(
+                    N,              // 보드 크기
+                    false,          // AI 모드 아님
+                    _players,       // 플레이어 이름 리스트
+                    aiDifficulty,   // (멀티면 무시해도 됨)
+                    _roomId,
+                    _myPlayerId,
+                    _gameRound
+                );
+            }
+
+            // 승자 판정 (2명/3명 모두 공용)
             int winnerIndex = -1;
             int bestScore = -1;
             bool isTie = false;
@@ -725,22 +768,28 @@ namespace DotsAndBoxes
         // 남은 수가 없는지 확인하고, 없으면 결과창 띄움
         private void CheckGameEnd()
         {
-            // 이미 한 번 처리했으면 다시 하지 않음
             if (_gameEnded) return;
+
             if (GetAvailableMoves().Count == 0)
             {
                 _gameEnded = true;
 
                 // 1.5초(1500ms) 후에 결과창 보여주기
                 var delayTimer = new System.Windows.Forms.Timer();
-                delayTimer.Interval = 1500; // 원하는 만큼 조절 (1000 = 1초, 2000 = 2초)
+                delayTimer.Interval = 1500;
 
                 delayTimer.Tick += (s, e) =>
                 {
                     delayTimer.Stop();
                     delayTimer.Dispose();
 
-                    ShowGameResult();   // 여기서 그때 결과창으로 전환
+                    if (!this.IsDisposed && this.IsHandleCreated)
+                    {
+                        this.BeginInvoke(new Action(() =>
+                        {
+                            ShowGameResult();
+                        }));
+                    }
                 };
 
                 delayTimer.Start();

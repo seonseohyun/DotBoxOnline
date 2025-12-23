@@ -52,14 +52,28 @@ namespace DotsAndBoxes
             lblTitle.TextAlign = ContentAlignment.MiddleCenter;
         }
 
+        private MainForm GetMainForm()
+        {
+            foreach (Form f in Application.OpenForms)
+            {
+                if (f is MainForm)
+                    return (MainForm)f;
+            }
+            return null;
+        }
+
         private void BtnStartGame_Click(object sender, EventArgs e)
         {
             int boardSize = cbBoardSize.SelectedIndex + 5;
             GamePlayForm.AIDifficulty difficulty = (GamePlayForm.AIDifficulty)cbDifficulty.SelectedIndex;
 
-            GamePlayForm gameForm = new GamePlayForm(boardSize, difficulty);
-            gameForm.Show();
-            this.Hide();
+            MainForm main = GetMainForm();  
+            if (main == null)
+            {
+                MessageBox.Show("MainForm을 찾지 못했습니다.");
+                return;
+            }
+            main.LoadChildForm(new GamePlayForm(boardSize, difficulty));
         }
 
         private void BtnBack_Click(object sender, EventArgs e)
