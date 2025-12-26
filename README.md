@@ -100,31 +100,50 @@ ASP.NET Core 서버 + WinForms 클라이언트 구조를 기반으로,
 - DB 미사용 (세션 중심 구조)
 
 ---
-## 🎮 Demo Screenshots
+## 🌐 Multiplayer Demo
 
-> 실제 플레이 흐름 기준으로 정리했습니다.
-
-### 1️⃣ 메인 화면
-
-<img src="docs/images/demo_01_main.png" width="600"/>
+> 실시간 멀티플레이 중심으로 구성된 핵심 플레이 화면입니다.
 
 ---
 
-### 2️⃣ 방 생성
+### 1️⃣ 멀티플레이 로비 (방 생성 / 참가)
 
-<img src="docs/images/demo_02_create_room.png" width="600"/>
+<img src="docs/images/4_multi_lobby.png" width="600"/>
 
----
-
-### 3️⃣ 게임 플레이
-
-<img src="docs/images/demo_03_gameplay.png" width="600"/>
+* 초대 코드 기반 방 참가
+* 플레이어 대기 상태 관리
 
 ---
 
-### 4️⃣ 게임 종료 결과
+### 2️⃣ 멀티플레이 로비 (플레이어 구성)
 
-<img src="docs/images/demo_04_result.png" width="600"/>
+<img src="docs/images/4_multi_lobby2.png" width="600"/>
+
+* 2~3인 플레이어 구성
+* 게임 시작 전 상태 동기화
+
+---
+
+### 3️⃣ 멀티플레이 진행
+
+<img src="docs/images/5_multi_play.png" width="600"/>
+
+* 실시간 턴 동기화
+* 서버 중심 선 긋기 / 박스 판정
+
+---
+
+### 4️⃣ 멀티플레이 결과
+
+<img src="docs/images/6_multi_result.png" width="600"/>
+
+* 점수 비교 및 승패 결과 화면
+
+---
+
+📘 싱글 플레이(AI) 및 전체 스크린샷
+→ [Single Player & Full Screenshots](docs/single-and-details.md)
+
 
 
 ## 💻 실행 환경
